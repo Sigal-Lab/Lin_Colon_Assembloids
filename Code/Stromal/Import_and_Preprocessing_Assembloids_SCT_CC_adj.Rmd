@@ -1,0 +1,176 @@
+---
+title: "Manqiang_preprocessing_SCT_CC_adj"
+output: html_document
+date: "2023-01-26"
+---
+
+```{r, message=FALSE}
+library(Seurat)
+#library(SeuratDisk)
+library(ggplot2)
+
+library(readxl)
+library(knitr)
+library(data.table)
+library(cowplot)
+library(magrittr)
+
+library(homologene)
+
+library(pheatmap)
+
+library(future)
+plan("multicore", workers = 10)
+options(future.globals.maxSize = 10*2**32)
+
+data_storage_folder = "../../Results/stromal/"
+
+# scRNA-seq - data from Manqiang
+set.seed(1234)
+```
+
+
+
+```{r}
+# Those are epithelial (Epcam+) cells (and some other cells, likely doublets) that should be excluded
+preexcluded_cells = read.table("../../Data/cell_annotations/Pre-excluded_cells_assembloid_stroma.txt", sep="\t", header=T)
+```
+
+
+```{r, fig.height=6, fig.width=8}
+
+#scData.combined = readRDS("../Preprocessed/As ready for figure_scRNAseq_data.rds")
+#scData.combined$cluster_label = Idents(scData.combined)
+#saveRDS(scData.combined@meta.data, file="Hao_Metadata.rds")
+#rm(scData.combined)
+
+sp5.data <- Read10X(data.dir = "../../Data/filtered_matrices/stromal/SP087_005/")
+sp5 <- CreateSeuratObject(counts = sp5.data, project = "sp5", min.cells = 3, min.features = 200)
+
+sp6.data <- Read10X(data.dir = "../../Data/filtered_matrices/stromal/SP087_006/")
+sp6 <- CreateSeuratObject(counts = sp6.data, project = "sp6", min.cells = 3, min.features = 200)
+
+sp5$included = !Cells(sp5) %in% subset(preexcluded_cells, orig.ident=="sp5")$cell_id
+sp6$included =  !Cells(sp6) %in% subset(preexcluded_cells, orig.ident=="sp6")$cell_id
+
+# # the preprocessed data set from Hao contains less cells. It is unclear why, possibly different thresholds were used for filtering
+# # we here filter out any cells not contained in Hao's data set. 
+# meta_Hao = readRDS("Hao_Metadata.rds")
+# meta_Hao$cell_id_orig = unlist(sapply(strsplit(rownames(meta_Hao),"_"),`[`,1))
+# meta_Hao$in_sp5 = ifelse(meta_Hao$cell_id_orig %in% Cells(sp5) & meta_Hao$orig.ident=="sp5", T, F)
+# meta_Hao$in_sp6 = ifelse(meta_Hao$cell_id_orig %in% Cells(sp6) & meta_Hao$orig.ident=="sp6", T, F)
+# meta_Hao$cell_found = meta_Hao$in_sp5 | meta_Hao$in_sp6
+# 
+# sp5 = subset(sp5, Cells(sp5) %in% subset(meta_Hao, orig.ident=="sp5")$cell_id_orig)
+# sp6 = subset(sp6, Cells(sp6) %in% subset(meta_Hao, orig.ident=="sp6")$cell_id_orig)
+
+sp5[["percent.mt"]] <- PercentageFeatureSet(sp5, pattern = "^mt-")
+sp6[["percent.mt"]] <- PercentageFeatureSet(sp6, pattern = "^mt-")
+```
+
+
+
+```{r, fig.width=6}
+plot1 <- VlnPlot(sp5, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+plot2 <- VlnPlot(sp6, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+cowplot::plot_grid(plot1, plot2, nrow = 2)
+```
+
+
+```{r}
+# filter cells
+sp5_1 <- subset(sp5, subset = nFeature_RNA > 500 & percent.mt < 10 & included)
+plot1_1 <- VlnPlot(sp5_1, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+cowplot::plot_grid(plot1, plot1_1, nrow = 2)
+
+sp6_1 <- subset(sp6, subset = nFeature_RNA > 500 & percent.mt < 10 & included)
+plot2_1 <- VlnPlot(sp6_1, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+cowplot::plot_grid(plot2, plot2_1, nrow = 2)
+```
+
+
+```{r}
+# merge two dataets into a list of two seurat objects (sp5 and sp6)
+sc.list <- list(sp5_1, sp6_1)
+names(sc.list) <- c('sp5', 'sp6')
+
+rm(sp5, sp6, sp5.data, sp6.data)
+gc()
+
+```
+
+
+```{r}
+scData = merge(sc.list[[1]], sc.list[[2]])
+scData <- NormalizeData(object = scData, normalization.method = "LogNormalize", scale.factor = 1e4)
+scData <- FindVariableFeatures(object = scData, selection.method = "vst")
+scData <- ScaleData(object = scData, features = rownames(scData))
+
+scData <- RunPCA(scData, features = VariableFeatures(scData), ndims.print = c(1:20), nfeatures.print = 20)
+
+mouse.cc.genes = lapply(cc.genes.updated.2019, function(x) unique(human2mouse(x, db = homologeneData2)$mouseGene))
+#scData <- CellCycleScoring(scData, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+scData <- CellCycleScoring(scData, s.features = mouse.cc.genes$s.genes, g2m.features = mouse.cc.genes$g2m.genes, set.ident = TRUE)
+cc_tab = scData@meta.data[, c("Phase","S.Score","G2M.Score", "orig.ident")]
+```
+
+```{r}
+# view cell cycle scores and phase assignments
+boxplot(cc_tab$S.Score ~ cc_tab$Phase)
+boxplot(cc_tab$G2M.Score ~ cc_tab$Phase)
+
+m = table(cc_tab$Phase, cc_tab$orig.ident)
+kable(m)
+
+tmp = as.matrix.data.frame(m)
+colnames(tmp) = colnames(m)
+rownames(tmp) = rownames(m)
+mr = sweep(tmp, 2, apply(tmp,2,sum),"/")
+kable(round(mr,2))
+
+pheatmap(mr, scale="none", main="Relative contributions of cell cycle phases per sample", breaks=seq(0,1,by=0.01))
+```
+
+
+```{r}
+sc.list <- SplitObject(scData, split.by = "orig.ident")
+# normalize the datasets using SCTransform
+#sc.list <- lapply(X = sc.list, FUN = SCTransform)
+sc.list <- lapply(X = sc.list, FUN = function(x) {
+      x <- SCTransform(x, vst.flavor = "v2", verbose = FALSE, vars.to.regress = c("S.Score", "G2M.Score" )) %>%
+    RunPCA(npcs = 30, verbose = FALSE)
+  })    
+features <- SelectIntegrationFeatures(object.list = sc.list, nfeatures = 3000)
+
+### Perform integration
+sc.list <- PrepSCTIntegration(object.list = sc.list, anchor.features = features)
+sc.anchors <- FindIntegrationAnchors(object.list = sc.list, normalization.method = "SCT",
+                                         anchor.features = features)
+# create list of common genes to keep
+to_integrate <- Reduce(intersect, lapply(sc.anchors@object.list, rownames))
+
+combined.sct <- IntegrateData(anchorset = sc.anchors, normalization.method = "SCT", features.to.integrate=to_integrate)  
+gc()
+
+### Perform an integrated analysis
+combined.sct <- RunPCA(combined.sct, verbose = FALSE)
+combined.sct <- RunUMAP(combined.sct, reduction = "pca", dims = 1:30)
+combined.sct <- RunTSNE(combined.sct, reduction = "pca", dims = 1:30)
+
+combined.sct <- FindNeighbors(combined.sct, reduction = "pca", dims = 1:30)
+combined.sct <- FindClusters(combined.sct, resolution = 0.2)  # modify resolution to change the number of clusters
+
+# combined.sct@meta.data$cluster_label = meta_Hao[Cells(combined.sct), "cluster_label"]
+# combined.sct <- SetIdent(combined.sct, value="cluster_label" )
+
+combined.sct <- NormalizeData(object = combined.sct, normalization.method = "LogNormalize", assay = "RNA")
+combined.sct <- ScaleData(object = combined.sct, features = rownames(combined.sct), assay = "RNA")
+
+saveRDS(combined.sct, file.path(data_storage_folder, "Assembloids_combined_SCT_CC_adj.Rdata"), compress=T)
+```
+
+
+```{r}
+DimPlot(combined.sct, group.by = "seurat_clusters")
+```
+

@@ -1,0 +1,11 @@
+ClusterID	Type	Label	Markers
+0	Epithelial	TA	MjV
+1	Epithelial	Colonocytes	MjV
+2	Epithelial	Goblet	Muc2;Spink4
+3	Epithelial	TA prolif.	Top2a,Mki67
+4	Epithelial	SC	Lgr5,Axin2
+5	Epithelial	TA	MjV
+6	Epithelial	Goblet	MjV
+7	Epithelial	Goblet	MjV
+8	Epithelial	Enteroendocrine/Tuft	Chga,Dclk1
+

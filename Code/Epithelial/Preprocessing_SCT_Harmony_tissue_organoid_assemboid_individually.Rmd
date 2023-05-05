@@ -1,0 +1,151 @@
+---
+title: "Preprocessing, epithelial cells, SCT + Harmony, individual processing of tissue/organoids/assembloids"
+output: html_document
+date: "2023-01-26"
+---
+
+```{r, message=FALSE}
+library(Seurat)
+#library(SeuratDisk)
+library(ggplot2)
+
+library(readxl)
+library(knitr)
+library(data.table)
+library(cowplot)
+library(magrittr)
+
+library(homologene)
+library(pheatmap)
+
+library(harmony)
+
+library(future)
+plan("multicore", workers = 10)
+options(future.globals.maxSize = 10*2**32)
+
+data_storage_folder = ("../../Results/epithelial/")
+
+set.seed(1234)
+```
+
+
+```{r, fig.height=6, fig.width=8}
+load(file.path(data_storage_folder, "All_Filtered_scData.Rdata"))
+```
+
+```{r}
+sc_list = SplitObject(all_ge_data_filtered, split.by="Condition")
+rm(all_ge_data_filtered)
+gc()
+```
+
+
+
+```{r}
+prepro_fun1 <- function(scData) {
+  scData <- NormalizeData(object = scData, normalization.method = "LogNormalize", scale.factor = 1e4)
+  scData <- FindVariableFeatures(object = scData, selection.method = "vst")
+  scData <- ScaleData(object = scData)
+  
+  scData <- RunPCA(scData, features = VariableFeatures(scData), ndims.print = c(1:20), nfeatures.print = 20)
+  
+  mouse.cc.genes = lapply(cc.genes.updated.2019, function(x) unique(human2mouse(x, db = homologeneData2)$mouseGene))
+  
+  scData <- CellCycleScoring(scData, s.features = mouse.cc.genes$s.genes, g2m.features = mouse.cc.genes$g2m.genes, set.ident = TRUE)
+  return(scData)
+}  
+sc_list <- lapply(sc_list, prepro_fun1)  
+```
+
+```{r, eval=FALSE}
+# view cell cycle scores and phase assignments
+boxplot(cc_tab$S.Score ~ cc_tab$Phase)
+boxplot(cc_tab$G2M.Score ~ cc_tab$Phase)
+
+m = table(cc_tab$Phase, cc_tab$orig.ident)
+kable(m)
+
+tmp = as.matrix.data.frame(m)
+colnames(tmp) = colnames(m)
+rownames(tmp) = rownames(m)
+mr = sweep(tmp, 2, apply(tmp,2,sum),"/")
+kable(round(mr,2))
+
+pheatmap(mr, scale="none", main="Relative contributions of cell cycle phases per sample", breaks=seq(0,1,by=0.01))
+```
+
+```{r}
+meta_from_combined = read.table(file.path(data_storage_folder, "Metadata_all_combined_SCT_Harmony.txt"), sep="\t", header=T)
+rownames(meta_from_combined) <- meta_from_combined$cell_id
+```
+
+```{r}
+pc_num = c("tissue"=10, "organoids"=20, "assembloids"=20)
+resolution_fc = c("tissue"=0.25, "organoids"=0.2, "assembloids"=0.2)
+```
+
+
+```{r}
+for (m in names(sc_list)) {
+  sc.list2 <- SplitObject(sc_list[[m]], split.by = "orig.ident")
+  
+  # normalize the datasets using SCTransform
+  sc.list2 <- lapply(X = sc.list2, FUN = function(x) {
+      x <- SCTransform(x, vst.flavor = "v2", verbose = FALSE) %>%
+      RunPCA(npcs = 30, verbose = FALSE)
+  })
+
+  features <- SelectIntegrationFeatures(object.list = sc.list2, nfeatures = 3000)
+
+  combined.sct = merge(sc.list2[[1]], sc.list2[2:length(sc.list2)], merge.data = T)
+  VariableFeatures(combined.sct) <- features
+  
+  plan("multicore", workers = 12)
+
+  combined.sct <- RunPCA(combined.sct, verbose = FALSE,  assay = "SCT")
+  combined.sct <- RunHarmony(object = combined.sct,
+                                    assay.use = "SCT",
+                                    reduction = "pca",
+                                    dims.use = 1:50,
+                                    group.by.vars = "orig.ident",
+                                    plot_convergence = TRUE)
+  pcn = pc_num[[m]]
+  combined.sct <- RunUMAP(combined.sct, reduction = "harmony", dims = 1:pcn, verbose = FALSE, assay="SCT")
+  combined.sct <- FindNeighbors(combined.sct, reduction = "harmony", dims = 1:pcn, assay="SCT")
+  combined.sct <- FindClusters(combined.sct, resolution = resolution_fc[m])
+  
+  combined.sct$label_from_combined <- meta_from_combined[Cells(combined.sct), "cluster_label"]
+  
+  sc_list[[m]] <- combined.sct
+
+}
+```
+
+```{r}
+ofile = file.path(data_storage_folder, "Assembloids_Organoids_Tissue_individually_SCT_Harmony_epithelial.rds")
+if(!file.exists(ofile)) saveRDS(sc_list, ofile, compress=T)
+```
+
+```{r, fig.width = 8, fig.height = 6}
+for (m in names(sc_list)) {
+  print(DimPlot(sc_list[[m]], group.by = "seurat_clusters", label=T) + NoLegend() + ggtitle(m))
+  print(DimPlot(sc_list[[m]], group.by = "seurat_clusters", label=T, split.by="orig.ident") + NoLegend() + ggtitle(m) )
+  print(DimPlot(sc_list[[m]], group.by = "label_from_combined", label=T) + NoLegend() + ggtitle(m))
+}
+```
+
+```{r}
+for (m in names(sc_list)) {
+  print(m)
+  print(table(sc_list[[m]]$label_from_combined, sc_list[[m]]$seurat_clusters))
+}
+```
+
+
+# Software versions
+
+```{r}
+sessionInfo()
+```
+

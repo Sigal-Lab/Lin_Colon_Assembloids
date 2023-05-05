@@ -1,0 +1,11 @@
+ClusterID	Type	Label	Comments
+0	Stroma	Stroma 3	Pcolce2, Ackr4; Rspo1/2/3
+1	Stroma	Stroma 1	Adamdec1, Sfrp2
+2	Stroma	Stroma 2	Wnt5a,Bmp7, Sox6, Fgf9
+3	Stroma	Myofibroblast	Acta2,Myh11
+4	Endothelial	Endothelial 1	Pecam1
+5	Endothelial	Endothelial 2	Pecam1, Vwf
+6	Pericytes	Pericytes	Hcar2
+7	n.a.	Proliferative	Mki67,Top2a
+8	Leukocyte	Macrophage	Cd53, Cd45
+9	Glial	Glial	S100b

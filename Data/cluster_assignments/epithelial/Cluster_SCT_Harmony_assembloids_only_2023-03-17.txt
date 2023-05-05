@@ -1,0 +1,10 @@
+ClusterID	Type	Label	Markers
+0	Epithelial	TA	MjV
+1	Epithelial	Colonocytes/TA	MjV
+2	Epithelial	SC	MjV
+3	Stroma	Fibroblast/Mixed	MjV
+4	Epithelial	Goblet	MjV
+5	Epithelial	TA	MjV
+6	Leukocytes	Leukocytes	MjV
+7	Epithelial	Enteroendocrine	MjV
+

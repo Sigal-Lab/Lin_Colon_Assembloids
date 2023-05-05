@@ -1,0 +1,12 @@
+ClusterID	Type	Label	Comments
+0	Fibroblast	Fibroblast 2	MjV
+1	Fibroblast	Fibroblast 1	MjV
+2	Fibroblast	Fibroblast 3	MjV
+3	Stroma	Smooth muscle cell	Acta2,Myh11; MjV
+4	Endothelial	Endothelial 1	Pecam1, Vwf; includes pericytes
+5	Fibroblast	MSC	MjV
+6	Endothelial	Lymphatic endothelial	Lyve1; MjV
+7	Glial	Glial	S100b; MjV
+8	Stroma	interstitial Cajal 2	Kit, Ano1; MjV
+9	Stroma	interstitial Cajal 1	Kit, Ano1; MjV
+

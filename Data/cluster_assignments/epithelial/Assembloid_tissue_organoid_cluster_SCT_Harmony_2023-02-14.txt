@@ -1,0 +1,11 @@
+ClusterID	Type	Label	Markers
+0	Epithelial	TA 1	Ascl2
+1	Epithelial	SC	Lgr5;Axin2
+2	Epithelial	TA 2	Ascl2
+3	Epithelial	Colonocytes	Aqp8,Car1
+4	Epithelial	Goblet	Muc2;Spink4
+5	Epithelial	TA 3	Dmbt1;Agp4
+6	Stroma	Fibroblast/Mixed	Vim;Cd34;Col1a1;Dclk1
+7	Leukocytes	Leukocytes	Cd45;Cd4;Cd68;F4/80
+8	Epithelial	Enteroendocrine	Chga
+

@@ -1,0 +1,12 @@
+ClusterID	Type	Label	Comments
+0	Stoma	Fibroblast 3	MjV
+1	Stroma	Fibroblast 1	MjV
+2	Stroma	Fibroblast 2	MjV
+3	Stroma	Fibroblast 2	MjV
+4	Stroma	Fibroblast 1	MjV
+5	Stroma	SMC	MjV
+6	Endothelial	Blood endothelial	MjV
+7	Endothelial	Lymphatic endothelial	MjV
+8	Stroma	MSC	MjV
+9	Glia	Glia	MjV
+10	Stroma	ICC	MjV

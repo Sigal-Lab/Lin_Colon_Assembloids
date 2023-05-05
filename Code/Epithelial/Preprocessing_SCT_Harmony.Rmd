@@ -1,0 +1,120 @@
+---
+title: "Preprocessing, epithelial cells, SCT + Harmony"
+output: html_document
+date: "2023-01-26"
+---
+
+```{r, message=FALSE}
+library(Seurat)
+#library(SeuratDisk)
+library(ggplot2)
+
+library(readxl)
+library(knitr)
+library(data.table)
+library(cowplot)
+library(magrittr)
+
+library(homologene)
+library(pheatmap)
+
+library(harmony)
+
+library(future)
+plan("multicore", workers = 10)
+options(future.globals.maxSize = 10*2**32)
+
+data_storage_folder = ("../../Results/epithelial/")
+
+set.seed(1234)
+```
+
+
+```{r, fig.height=6, fig.width=8}
+
+load(file.path(data_storage_folder, "All_Filtered_scData.Rdata"))
+```
+
+
+```{r}
+scData = all_ge_data_filtered
+scData <- NormalizeData(object = scData, normalization.method = "LogNormalize", scale.factor = 1e4)
+scData <- FindVariableFeatures(object = scData, selection.method = "vst")
+scData <- ScaleData(object = scData)
+
+scData <- RunPCA(scData, features = VariableFeatures(scData), ndims.print = c(1:20), nfeatures.print = 20)
+
+mouse.cc.genes = lapply(cc.genes.updated.2019, function(x) unique(human2mouse(x, db = homologeneData2)$mouseGene))
+scData <- CellCycleScoring(scData, s.features = mouse.cc.genes$s.genes, g2m.features = mouse.cc.genes$g2m.genes, set.ident = TRUE)
+cc_tab = scData@meta.data[, c("Phase","S.Score","G2M.Score", "orig.ident")]
+```
+
+```{r}
+# view cell cycle scores and phase assignments
+boxplot(cc_tab$S.Score ~ cc_tab$Phase)
+boxplot(cc_tab$G2M.Score ~ cc_tab$Phase)
+
+m = table(cc_tab$Phase, cc_tab$orig.ident)
+kable(m)
+
+tmp = as.matrix.data.frame(m)
+colnames(tmp) = colnames(m)
+rownames(tmp) = rownames(m)
+mr = sweep(tmp, 2, apply(tmp,2,sum),"/")
+kable(round(mr,2))
+
+pheatmap(mr, scale="none", main="Relative contributions of cell cycle phases per sample", breaks=seq(0,1,by=0.01))
+```
+
+```{r}
+sc.list <- SplitObject(scData, split.by = "orig.ident")
+rm(scData, all_ge_data_filtered)
+gc(full = T)
+
+# normalize the datasets using SCTransform
+sc.list <- lapply(X = sc.list, FUN = function(x) {
+    x <- SCTransform(x, vst.flavor = "v2", verbose = FALSE) %>%
+    RunPCA(npcs = 30, verbose = FALSE)
+  })
+
+```
+
+```{r}
+features <- SelectIntegrationFeatures(object.list = sc.list, nfeatures = 3000)
+
+combined.sct = merge(sc.list[[1]], sc.list[2:length(sc.list)], merge.data = T)
+VariableFeatures(combined.sct) <- features
+```
+
+
+```{r}
+plan("multicore", workers = 12)
+### Perform an integrated analysis
+
+combined.sct <- RunPCA(combined.sct, verbose = FALSE,  assay = "SCT")
+combined.sct <- RunHarmony(object = combined.sct,
+                                  assay.use = "SCT",
+                                  reduction = "pca",
+                                  dims.use = 1:50,
+                                  group.by.vars = "orig.ident",
+                                  plot_convergence = TRUE)
+combined.sct <- RunUMAP(combined.sct, reduction = "harmony", dims = 1:20, verbose = FALSE, assay="SCT")
+combined.sct <- FindNeighbors(combined.sct, reduction = "harmony", dims = 1:20, assay="SCT")
+combined.sct <- FindClusters(combined.sct, resolution = 0.2)
+scData.combined = combined.sct
+
+saveRDS(combined.sct, file.path(data_storage_folder, "Assembloids_Organoids_Tissue_combined_SCT_Harmony_epithelial.rds"), compress=T)
+
+```
+
+```{r, fig.width = 8, fig.height = 6}
+DimPlot(combined.sct, group.by = "seurat_clusters", label=T) + NoLegend()
+DimPlot(combined.sct, group.by = "seurat_clusters", label=T, split.by="Condition") + NoLegend()
+```
+
+# Software versions
+
+```{r}
+sessionInfo()
+```
+

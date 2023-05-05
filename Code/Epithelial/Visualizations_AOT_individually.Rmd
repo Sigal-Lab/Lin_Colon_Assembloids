@@ -1,0 +1,504 @@
+---
+title: "Visualizations - Assembloid/Organoid/Tissue epithelial cells, individually processed conditions"
+author: "Hilmar Berger"
+output: 
+ html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: false
+    number_sections: true
+    code_folding: hide
+    
+pdf_document:
+    fig_caption: true
+date: "`r format(Sys.time(), '%d %B, %Y %H:%M:%S')`"
+---
+
+
+```{r, message=FALSE}
+rm(list=ls())
+library(Seurat)
+library(ggplot2)
+
+library(readxl)
+library(writexl)
+library(knitr)
+library(data.table)
+library(cowplot)
+library(magrittr)
+library(dplyr)
+
+library(homologene)
+
+library(pheatmap)
+
+library(grid)
+library(png)
+
+library(GSVA)
+
+data_storage_folder = ("../../Results/epithelial/")
+result_folder = data_storage_folder
+
+library(future)
+options("future.globals.maxSize"=2**33)
+plan("multisession", workers = 8)
+
+rerun_dge_analyses = F
+rerun_gsva = T
+```
+
+# Overview
+
+
+```{r}
+sc_list = readRDS(file.path(data_storage_folder, "Assembloids_Organoids_Tissue_individually_SCT_Harmony_epithelial.rds"))
+
+set.seed(1234)
+
+```
+
+```{r}
+cluster_final_files = c("assembloids"="Cluster_SCT_Harmony_assembloids_only_2023-03-17.txt", "tissue"="Cluster_SCT_Harmony_tissue_only_2023-03-20.txt", "organoids" = "Cluster_SCT_Harmony_organoids_only_2023-03-17.txt")
+
+for (m in names(sc_list)) {
+  cluster_assignment = read.table(file.path("../../Data/cluster_assignments/epithelial/", cluster_final_files[[m]]), sep="\t",header=T, stringsAsFactors = F)
+  rownames(cluster_assignment) = as.character(cluster_assignment$ClusterID)
+  sc_list[[m]] = AddMetaData(sc_list[[m]], cluster_assignment[as.character(sc_list[[m]]$seurat_clusters),"Label"], col.name = "cluster_label")
+  sc_list[[m]] = AddMetaData(sc_list[[m]], cluster_assignment[as.character(sc_list[[m]]$seurat_clusters),"Type"], col.name = "cluster_type")
+  #sc_list[[m]]$cluster_label = factor(sc_list[[m]]$cluster_label, levels=cluster_order[[m]])
+  sc_list[[m]] = SetIdent(sc_list[[m]], value="cluster_label")
+}
+```
+
+
+```{r}
+
+cluster_order = list("assembloids" = c("SC", "TA", "Colonocytes/TA","Goblet","Enteroendocrine","Leukocytes","Fibroblast/Mixed"), 
+                      "organoids" = c("SC","SC/TA","TA","Colonocyte/TA","Goblet/EE"),
+                     "tissue" = c("SC","TA","TA prolif.","Colonocytes","Goblet","Enteroendocrine/Tuft") )
+
+
+for (m in names(sc_list)) {
+  # sanity checks - check if all cluster order labels actually exist
+  #print(cluster_order[[m]][!cluster_order[[m]] %in% sc_list[[m]]$cluster_label])
+  sc_list[[m]]$cluster_label = factor(sc_list[[m]]$cluster_label, levels=cluster_order[[m]])
+  sc_list[[m]] = SetIdent(sc_list[[m]], value="cluster_label")
+}
+
+
+```
+
+
+# Cluster overview - all clusters
+
+```{r, fig.width = 8, fig.height = 6}
+for (m in names(sc_list)) {
+  print(DimPlot(sc_list[[m]], group.by = "cluster_label", label=T) + NoLegend() + ggtitle(m))
+  mm = table(sc_list[[m]]$cluster_label, sc_list[[m]]$orig.ident, dnn=c(paste0(m," clusters"), "Sample"))
+  print(mm)
+  prop.table(mm, margin=2) |> pheatmap(main=m)
+  par(mar=c(12,4,4,1))
+  barplot(table(sc_list[[m]]$cluster_label), las=2, main=m)
+  par(mar=c(5,4,4,1))
+}
+```
+
+# Tuft cell / Leukocyte markers
+
+```{r, fig.width=12, fig.height=4}
+for(m in names(sc_list)) {
+  tmp = sc_list[[m]]
+  DefaultAssay(tmp) <- "RNA"
+  p = FeaturePlot(tmp, features = c("Ptprc","Col1a1","Dclk1"), ncol = 3, order=T, combine=F, label=T)# + labs(subtitle = m)
+  print(plot_grid(plotlist = p, labels=m, label_y = 1,label_size = 10, ncol = 3))
+}
+
+```
+
+
+# Filtering 
+
+For all further analyses, we remove any non-epithelial clusters, in particular clusters with marker gene expression of stromal cells and immune cells (i.e. Leukocyte and Fibroblast-like clusters)-
+
+
+```{r}
+sc_list = lapply(sc_list, function(x) {sel_cells = Cells(x)[(!x$cluster_label %in% c("Leukocytes","Fibroblast/Mixed") & !x$label_from_combined %in% c("Fibroblast/Mixed","Leukocytes") )]; subset(x, cells = sel_cells)})
+```
+
+# Cluster overview - only epithelial clusters
+
+```{r, fig.width = 8, fig.height = 6}
+for (m in names(sc_list)) {
+  # print(DimPlot(sc_list[[m]], group.by = "seurat_clusters", label=T) + NoLegend() + ggtitle(m))
+  # print(DimPlot(sc_list[[m]], group.by = "seurat_clusters", label=T, split.by="orig.ident") + NoLegend() + ggtitle(m) )
+  print(DimPlot(sc_list[[m]], group.by = "cluster_label", label=T) + NoLegend() + ggtitle(m))
+}
+```
+
+# Cluster markers in in-vivo Tissue
+
+## Marker genes for clusters
+
+```{r}
+if(rerun_dge_analyses) {
+  cluster_markers <- FindAllMarkers(object = sc_list[["tissue"]], only.pos = TRUE, assay = "RNA")
+  save(cluster_markers, file=file.path(data_storage_folder, "All_cluster_markers_SCT_Harmony_Tissue_only.Rdata"))
+  write_xlsx(cluster_markers,file.path(result_folder, "All_cluster_markers_SCT_Harmony_Tissue_only.xlsx"))
+} else {
+  load(file.path(data_storage_folder, "All_cluster_markers_SCT_Harmony_Tissue_only.Rdata"))
+}
+```
+
+```{r}
+plot_top_genes <- function(data, dge_results_all, title) {
+  for (n in sort(unique(dge_results_all$cluster))) {
+    tmp = subset(dge_results_all, cluster==n)
+    if(nrow(tmp)<1) next
+    tmp_up = subset(tmp, avg_log2FC > 0)
+    if(nrow(tmp_up)<1) next
+    tmp_up$direction = "up"
+    #tmp_down = subset(tmp, avg_log2FC < 0)
+    #tmp_down$direction = "down"
+    
+    #final_top_genes = rbind(head(tmp_up,10), head(tmp_down,10))
+    final_top_genes = head(tmp_up, 10)
+    final_top_genes = final_top_genes[order(final_top_genes$avg_log2FC),]
+    final_top_genes$gene = factor(final_top_genes$gene, levels = final_top_genes$gene)
+    p = ggplot(final_top_genes, aes(y=avg_log2FC, x=gene, fill=direction)) + geom_bar(stat="identity") + ggtitle(paste0(n, ", ", title)) + coord_flip() + theme(axis.text.y =  element_text(size=12) )
+    print(p)
+    
+  }
+}
+```
+
+
+### Percent expression of top markers across clusters
+
+```{r, fig.width=16, fig.height=6}
+top_5_markers = unique(unlist(tapply(cluster_markers$gene, cluster_markers$cluster, head, 5)))
+DotPlot(sc_list[["tissue"]], features = top_5_markers , dot.scale = 4, cols = c("red", "blue"), assay = "RNA") +    RotatedAxis()
+```
+
+### Log2 Fold Changes of top 10 DE genes from each cluster
+
+```{r, fig.width=6, fig.height=4}
+plot_top_genes(sc_list[["tissue"]], cluster_markers, "Cluster markers")
+```
+
+
+# Individual marker expression
+
+
+
+```{r}
+
+plot_genes <- function(dataset, genes) {
+  
+  all_genes =rownames(dataset@assays$RNA)
+  
+  for (g in genes) {
+    if (!g %in% all_genes) {
+      print(paste0("Gene ",g," has no data (possibly filtered out)."))
+      next
+    } else {
+        p1  =FeaturePlot(object = dataset, features = g, reduction="umap", label = T, order = T)
+        p2 = VlnPlot(dataset, features = g, ncol = 1, pt.size = 0.01)
+        print(plot_grid(p1,p2, ncol=2,align="h"))
+    }
+  }
+}
+```
+
+
+
+## Global markers
+
+These are global cell markers for major cell lineages and types (B/T-cells, Mo/MF etc)
+
+Cells were sorted as CD14+ cells.
+
+CD45 is Ptprc.  
+Pglyrp1 - circulating polymorphonuclear leukocytes (granulocytes + mast cells)  
+
+We here add Cd3e/d/g as pan-T marker and Cd20 (Ms4a1) as mature B-cell marker.
+Gata3, Cxcr6, Rora - T-cell markers
+
+Ly6a(Sca-1) - positive in HSC/MPP
+Procr,Fdg5, Hoxb5 - HSC
+
+Epor, Slamf1(Cd150) - MegE - lineage
+
+```{r, fig.width=14, fig.height=6}
+
+sel_markers=c("Ptprc","Pglyrp1","Cd4","Cd3e","Cd3d","Cd3g", "Gata3","Cxcr6","Rora","Cd7","Cd8a","Cd19","Ms4a1","Ly6a", "Cd34","Procr","Fgd5","Hoxb5","Epor","Slamf1","Epcam","Vim")
+#DefaultAssay(scData.combined) <- "RNA"
+#plot_genes(scData.combined, sel_markers)
+
+```
+
+```{r, fig.width=14, fig.height=3}
+for(m in names(sc_list)) {
+  print(DotPlot(sc_list[[m]], features = sel_markers, cols="RdYlBu", assay = "RNA") + ggtitle(m)  )
+}
+
+```
+
+
+## Colon epithelial cell markers
+
+```{r, fig.width=14, fig.height=6}
+sel_markers=c("Lgr5","Ascl2","Axin2","Aqp8","Muc2","Spink4","Dclk1","Tff3","Chga","Krt20","Best2","Best4")
+#DefaultAssay(scData.combined) <- "RNA"
+
+#plot_genes(scData.combined, sel_markers)
+```
+
+```{r, fig.width=10, fig.height=3}
+for(m in names(sc_list)) {
+  print(DotPlot(sc_list[[m]], features = sel_markers, cols="RdYlBu", assay = "RNA", dot.scale = 8) + ggtitle(m)  )
+}
+```
+
+### Selected Feature-plots
+
+```{r, fig.width=8, fig.height=5}
+for(m in names(sc_list)) {
+  tmp = sc_list[[m]]
+  DefaultAssay(tmp) <- "RNA"
+  p = FeaturePlot(tmp, features = c("Lgr5","Mki67","Krt20","Muc2","Chga","Dclk1"), ncol = 3, order=T, combine=F)# + labs(subtitle = m)
+  print(plot_grid(plotlist = p, labels=m, label_y = 1,label_size = 10))
+}
+
+```
+
+## Proliferation
+
+```{r, fig.width=14, fig.height=6}
+sel_markers=c("Top2a","Mki67","Pcna")
+```
+
+```{r, fig.width=8, fig.height=3}
+for(m in names(sc_list)) {
+  print(DotPlot(sc_list[[m]], features = sel_markers, cols="RdYlBu", assay = "RNA", dot.scale = 8) + ggtitle(m)  )
+}
+```
+
+
+
+## Scores and RNA count per cluster
+
+```{r, fig.width=10, fig.height=3}
+for(m in names(sc_list)) {
+  p1 = VlnPlot(sc_list[[m]], features = "percent_mito", ncol = 1, pt.size = 0) + labs(subtitle=m) + NoLegend()
+  p2 = VlnPlot(sc_list[[m]], features = "nCount_RNA", ncol = 1, pt.size = 0) + labs(subtitle=m) + NoLegend()
+  p3 = VlnPlot(sc_list[[m]], features = "nFeature_RNA", ncol = 1, pt.size = 0) + labs(subtitle=m) + NoLegend()
+  print(cowplot::plot_grid(p1,p2,p3, ncol = 3))
+}
+```
+
+
+# Final publication figures
+
+## Fig. 1i
+
+```{r, fig.width=6, fig.height=3}
+sel_markers=c("Lgr5","Axin2","Mecom","Mki67","Car1","Krt20","Muc2","Spink4","Chga","Syp","Dclk1")
+
+for(m in names(sc_list)) {
+  p = DotPlot(sc_list[[m]], features = sel_markers, cols="RdYlBu", assay = "RNA", dot.scale = 8) + ggtitle(m) + theme(axis.text.x = element_text(angle=45,hjust=1))
+  print(p)
+  pdf(file.path(result_folder, paste0("Fig_1i_",m,".pdf")), width = 7, height = 3)
+  print(p)
+  dev.off()
+}
+
+```
+
+## Suppl Fig. 3
+
+### 3a/c/e
+
+
+```{r, fig.width = 8, fig.height = 6}
+for (m in names(sc_list)) {
+  p = DimPlot(sc_list[[m]], group.by = "cluster_label", label=T) + NoLegend() + ggtitle(m)
+  print(p)
+  m1 = c("assembloids"="a", "organoids"="e", "tissue"="c")[m]
+  pdf(file.path(result_folder, paste0("Supp Fig_3_",m1,".pdf")), width = 7, height = 3)
+  print(p)
+  dev.off()
+}
+```
+
+
+### Supp fig 3 b/d/f
+
+
+```{r, fig.width = 8, fig.height = 6}
+for (m in names(sc_list)) {
+  p = FeaturePlot(tmp, features = c("Lgr5","Mki67","Krt20","Muc2","Chga","Dclk1"), ncol = 3, order=T, combine=F)# + labs(subtitle = m)
+  print(plot_grid(plotlist = p, labels=m, label_y = 1,label_size = 10))
+  m1 = c("assembloids"="b", "organoids"="f", "tissue"="d")[m]
+  pdf(file.path(result_folder, paste0("Supp Fig_3_",m1,".pdf")), width = 8, height = 6)
+  print(plot_grid(plotlist = p, labels=m, label_y = 1,label_size = 10))
+  dev.off()
+}
+```
+
+
+# Parikh et al. cluster scores
+
+```{r}
+tmp_env = new.env()
+load(file.path("../../Data/external", "GSE116222_Simmons_Epithelial_IBD/All_cluster_markers_healthy.Rdata"), envir = tmp_env)
+tmp_markers = get("cluster_markers", tmp_env)
+tmp_markers$cluster = as.character(tmp_markers$cluster)
+tmp_markers = subset(tmp_markers, p_val_adj < 0.05 & avg_log2FC > 0.5)
+tmp_gs = split(tmp_markers$gene, tmp_markers$cluster)
+tmp_gs = lapply(tmp_gs, function(x) {xt = human2mouse(x, db=homologeneData2)$mouseGene; return(unique(xt[!is.na(xt)]))})
+names(tmp_gs) = make.names(paste0("Parikh_", names(tmp_gs)))
+tmp_gs <- tmp_gs[unlist(lapply(tmp_gs, length))>0]
+```
+
+
+
+```{r}
+library(GSVA)
+
+rerun=rerun_gsva
+for(m in names(sc_list)) {
+  gsva_score_file = file.path(data_storage_folder, file=paste0("Epithelial_individually_",m,"_Parikh_signatures_GSVA.rds") )
+if(rerun) {
+  scores = gsva(sc_list[[m]]@assays$SCT@data, gset.idx.list = tmp_gs, parallel.sz = 12)
+  saveRDS(scores, file=gsva_score_file)
+} else {
+  scores = readRDS(gsva_score_file)
+}
+
+for(ss in rownames(scores)) {
+  sc_list[[m]]@meta.data[[ss]] = scores[ss, Cells(sc_list[[m]])]
+}
+  
+}
+
+```
+
+```{r, fig.height=4, fig.width=8}
+for (m in names(sc_list)) {
+  print(DotPlot(sc_list[[m]], features = sort(names(tmp_gs)), cols = "RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1)) + labs(title=m))
+}
+
+```
+
+
+
+# GSE210415 healthy epithelium cluster scores
+
+```{r}
+tmp_env = new.env()
+load(file.path("../../Data/external", "GSE210415_mouse_colon/All_markers_SCT_Epi_healthy_only.Rdata"), envir = tmp_env)
+tmp_markers = get("cluster_markers", tmp_env)
+tmp_markers$cluster = as.character(tmp_markers$cluster)
+tmp_markers = subset(tmp_markers, p_val_adj < 0.05 & avg_log2FC > 0.5)
+tmp_gs = split(tmp_markers$gene, tmp_markers$cluster)
+names(tmp_gs) = make.names(paste0("GSE210415_", names(tmp_gs)))
+tmp_gs <- tmp_gs[unlist(lapply(tmp_gs, length))>0]
+```
+
+
+
+```{r}
+
+rerun=rerun_gsva
+for(m in names(sc_list)) {
+  gsva_score_file = file.path(data_storage_folder, file=paste0("Epithelial_individually_",m,"_GSE210415_signatures_GSVA.rds") )
+if(rerun) {
+  scores = gsva(sc_list[[m]]@assays$SCT@data, gset.idx.list = tmp_gs, parallel.sz = 12)
+  saveRDS(scores, file=gsva_score_file)
+} else {
+  scores = readRDS(gsva_score_file)
+}
+
+for(ss in rownames(scores)) {
+  sc_list[[m]]@meta.data[[ss]] = scores[ss, Cells(sc_list[[m]])]
+}
+  
+}
+
+```
+
+
+```{r, fig.height=4, fig.width=8}
+for (m in names(sc_list)) {
+  print(DotPlot(sc_list[[m]], features = sort(names(tmp_gs)), cols = "RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1)) + labs(title=m))
+}
+
+```
+
+
+# In-vivo tissue epithelium cluster scores
+
+```{r}
+tmp_env = new.env()
+load(file.path("../../Results/epithelial","All_cluster_markers_SCT_Harmony_Tissue_only.Rdata"), envir = tmp_env)
+tmp_markers = get("cluster_markers", tmp_env)
+tmp_markers$cluster = as.character(tmp_markers$cluster)
+tmp_markers = subset(tmp_markers, p_val_adj < 0.05 & avg_log2FC > 0.5)
+tmp_gs = split(tmp_markers$gene, tmp_markers$cluster)
+names(tmp_gs) = make.names(paste0("Tissue_in-vivo_", names(tmp_gs)))
+tmp_gs <- tmp_gs[unlist(lapply(tmp_gs, length))>0]
+```
+
+
+
+```{r}
+
+rerun=rerun_gsva
+for(m in names(sc_list)) {
+  gsva_score_file = file.path(data_storage_folder, file=paste0("Epithelial_individually_",m,"_Tissue_in-vivo_signatures_GSVA.rds") )
+if(rerun) {
+  scores = gsva(sc_list[[m]]@assays$SCT@data, gset.idx.list = tmp_gs, parallel.sz = 12)
+  saveRDS(scores, file=gsva_score_file)
+} else {
+  scores = readRDS(gsva_score_file)
+}
+
+for(ss in rownames(scores)) {
+  sc_list[[m]]@meta.data[[ss]] = scores[ss, Cells(sc_list[[m]])]
+}
+  
+}
+
+```
+
+
+```{r, fig.height=4, fig.width=8}
+for (m in names(sc_list)) {
+  print(DotPlot(sc_list[[m]], features = sort(names(tmp_gs)), cols = "RdYlBu", scale=F) + theme(axis.text.x = element_text(angle=45, hjust=1)) + labs(title=m))
+}
+
+```
+
+
+
+
+# Software versions
+
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

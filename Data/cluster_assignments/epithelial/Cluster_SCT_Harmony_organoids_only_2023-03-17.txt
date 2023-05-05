@@ -1,0 +1,7 @@
+ClusterID	Type	Label	Markers
+0	Epithelial	TA	MjV
+1	Epithelial	SC/TA	MjV
+2	Epithelial	SC	MjV
+3	Epithelial	TA	MjV
+4	Epithelial	Colonocyte/TA	MjV
+5	Epithelial	Goblet/EE	MjV

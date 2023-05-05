@@ -1,0 +1,577 @@
+---
+title: "Cluster identification - Assembloids clusters, mouse"
+author: "Hilmar Berger"
+output: 
+ html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: false
+    number_sections: true
+    code_folding: hide
+    
+pdf_document:
+    fig_caption: true
+date: "`r format(Sys.time(), '%d %B, %Y %H:%M:%S')`"
+---
+
+
+```{r, message=FALSE}
+rm(list=ls())
+library(Seurat)
+library(ggplot2)
+
+library(readxl)
+library(writexl)
+library(knitr)
+library(data.table)
+library(cowplot)
+library(magrittr)
+library(dplyr)
+
+library(homologene)
+
+library(pheatmap)
+
+library(grid)
+library(png)
+
+# library(clusterProfiler)
+# 
+# options(connectionObserver = NULL)
+# library(org.Hs.eg.db)
+# library(ReactomePA)
+# library(msigdbr)
+
+data_storage_folder = "../../Results/stromal/"
+result_folder = data_storage_folder
+
+library(future)
+options("future.globals.maxSize"=2**33)
+plan("multisession", workers = 8)
+plan("sequential")
+
+options("save.defaults" = list(compress=TRUE))
+
+#source("DotPlot_fixed.R")
+
+
+#ref_folder = "../../References/"
+
+rerun_analyses = F
+rerun_gsva = F
+```
+
+We only keep clusters annotated as MoMF, DC, and KC in the global analysis and reprocess the remaining cells using the same integrated analysis. 
+
+```{r}
+scData.combined <- readRDS(file.path(data_storage_folder, "Assembloids_combined_SCT_CC_adj.Rdata"))
+set.seed(1234)
+DefaultAssay(scData.combined) <- "integrated"
+scData.combined <- FindClusters(scData.combined, resolution = 0.4)  # modify resolution to change the number of clusters
+DefaultAssay(scData.combined) <- "RNA"
+
+
+```
+
+
+<!-- ```{r} -->
+<!-- in_vivo_combined_meta = read.table("Metadata_Jasso_Kinchen_Assembloids_SCT_Harmony.txt", sep="\t", header=T) -->
+<!-- rownames(in_vivo_combined_meta) <- in_vivo_combined_meta$cell_id -->
+
+<!-- scData.combined$clusters_with_Jasso <- in_vivo_combined_meta[Cells(scData.combined), "cluster_label"] -->
+<!-- ``` -->
+
+
+# Cluster overview
+
+# New clusters
+
+```{r, fig.width=10, fig.height=6}
+DimPlot(scData.combined, reduction = "umap", label = TRUE, group.by = "seurat_clusters")
+```
+
+<!-- ## Assembloids only -->
+
+<!-- ```{r, fig.width=10, fig.height=6} -->
+<!-- scData.combined <- SetIdent(scData.combined, value="cluster_label") -->
+<!-- DimPlot(scData.combined, reduction = "umap", label = TRUE) -->
+<!-- ``` -->
+
+<!-- ```{r, fig.width=10, fig.height=6} -->
+<!-- scData.combined <- SetIdent(scData.combined, value="clusters_with_Jasso") -->
+<!-- DimPlot(scData.combined, reduction = "umap", label = TRUE) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- table(scData.combined$cluster_label, scData.combined$clusters_with_Jasso) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- tt = table(scData.combined$seurat_clusters, scData.combined$clusters_with_Jasso) -->
+<!-- tt -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- pheatmap(tt) -->
+<!-- ``` -->
+
+
+
+# Final cluster assigment
+
+```{r}
+cluster_assignment = read.table("../../Data/cluster_assignments/stromal/Clusters_Assembloids_SCT_CCadj_2023-02-09_simple_clusters.txt", sep="\t",header=T, stringsAsFactors = F)
+options(width = 180)
+print(cluster_assignment)
+rownames(cluster_assignment) = as.character(cluster_assignment$ClusterID)
+scData.combined = AddMetaData(scData.combined, cluster_assignment[as.character(scData.combined$seurat_clusters),"Label"], col.name = "cluster_label")
+scData.combined = AddMetaData(scData.combined, cluster_assignment[as.character(scData.combined$seurat_clusters),"Type"], col.name = "cluster_type")
+
+scData.combined$cluster_label = scData.combined$cluster_label |> (\(x) factor(x, levels = sort(unique(x))))()
+```
+
+```{r, fig.width=8, fig.height=6}
+scData.combined = SetIdent(scData.combined, value="cluster_label" )
+p = DimPlot(scData.combined, reduction = "umap", label = TRUE)
+print(p)
+```
+
+
+```{r}
+saveRDS(scData.combined, file=file.path(data_storage_folder, "Assembloids_combined_SCT_CC_adj_annotated.rds"))
+```
+
+
+# Marker genes for clusters
+
+```{r}
+scData.combined <- SetIdent(scData.combined, value="cluster_label")
+if(rerun_analyses) {
+  cluster_markers <- FindAllMarkers(object = scData.combined, only.pos = TRUE, assay = "RNA")
+  save(cluster_markers, file=file.path(data_storage_folder, "All_markers_assembloids_V2_simple_clusters.Rdata"))
+  write_xlsx(cluster_markers,file.path(result_folder, "All_markers_assembloids_V2_simple_clusters.xlsx"))
+} else {
+  load(file.path(data_storage_folder, "All_markers_assembloids_V2_simple_clusters.Rdata"))
+}
+```
+
+```{r}
+plot_top_genes <- function(data, dge_results_all, title) {
+  for (n in sort(unique(dge_results_all$cluster))) {
+    tmp = subset(dge_results_all, cluster==n)
+    if(nrow(tmp)<1) next
+    tmp_up = subset(tmp, avg_log2FC > 0)
+    if(nrow(tmp_up)<1) next
+    tmp_up$direction = "up"
+    #tmp_down = subset(tmp, avg_log2FC < 0)
+    #tmp_down$direction = "down"
+
+    #final_top_genes = rbind(head(tmp_up,10), head(tmp_down,10))
+    final_top_genes = head(tmp_up, 10)
+    final_top_genes = final_top_genes[order(final_top_genes$avg_log2FC),]
+    final_top_genes$gene = factor(final_top_genes$gene, levels = final_top_genes$gene)
+    p = ggplot(final_top_genes, aes(y=avg_log2FC, x=gene, fill=direction)) + geom_bar(stat="identity") + ggtitle(paste0(n, ", ", title)) + coord_flip() + theme(axis.text.y =  element_text(size=12) )
+    print(p)
+
+  }
+}
+```
+
+
+```{r}
+cluster_markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+```
+
+
+## overview (10 top genes for each cluster)
+
+```{r, fig.width=14, fig.height=12}
+DoHeatmap(scData.combined, features = top10$gene) + NoLegend()
+```
+
+
+## Percent expression of top markers across clusters
+
+```{r, fig.width=16, fig.height=14}
+top_5_markers = unique(unlist(tapply(cluster_markers$gene, cluster_markers$cluster, head, 5)))
+DotPlot(scData.combined, features = top_5_markers , dot.scale = 4, cols = c("red", "blue"), assay = "RNA") +    RotatedAxis()
+```
+
+## Log2 Fold Changes of top 10 DE genes from each cluster
+
+```{r, fig.width=12, fig.height=6}
+plot_top_genes(scData.combined, cluster_markers, "Cluster markers")
+```
+
+
+```{r}
+
+plot_genes <- function(dataset, genes) {
+  
+  all_genes =rownames(dataset@assays$RNA)
+  
+  for (g in genes) {
+    if (!g %in% all_genes) {
+      print(paste0("Gene ",g," has no data (possibly filtered out)."))
+      next
+    } else {
+        p1  =FeaturePlot(object = dataset, features = g, reduction="umap", label = T, order=T)
+        p2 = VlnPlot(dataset, features = g, ncol = 1, pt.size = 0.01)
+        print(plot_grid(p1,p2, ncol=2,align="h"))
+    }
+  }
+}
+```
+
+```{r}
+#scData.combined <- SetIdent(scData.combined, value="seurat_clusters")
+```
+
+
+# Individual marker expression
+
+## Global markers 
+
+These are global cell markers for major cell lineages and types (B/T-cells, Mo/MF etc)
+
+CD45 is Ptprc.  
+
+We here add Cd3e/d/g as pan-T marker and Cd20 (Ms4a1) as mature B-cell marker.
+Gata3, Cxcr6, Rora - T-cell markers
+
+
+Endothelial - VWF, PECAM1  
+Glial - S100B  
+Pericytes - RGS5  
+Plasma cells - SDC1  
+ICC - Kit, Ano1 (Jasso et al. )
+
+
+```{r, fig.width=14, fig.height=6}
+
+sel_markers=(c("Ptprc","Cd4","Cd3e","Cd3d","Cd3g", "Gata3","Cxcr6","Rora","Cd7","Cd19","Ms4a1","Epcam","Vim", "Vwf","Pecam1","S100b","Rgs5","Sdc1", "Hcar2", "Kit","Ano1"))
+DefaultAssay(scData.combined) <- "RNA"
+
+plot_genes(scData.combined, sel_markers)
+
+```
+
+```{r, fig.width=15, fig.height=3}
+
+DotPlot(scData.combined, features = sel_markers, scale =T, cols = "RdYlGn", assay = "RNA")
+
+```
+
+## Stromal markers
+
+
+### Subpopulation markers from McCarthy et al. (Nat Cell Biol 2020, p.1030 ff)
+
+```{r, fig.width=14, fig.height=6}
+sel_markers = unlist(strsplit("Wnt2b, Wnt4, Wnt5a, Rspo1, Rspo2, Rspo3, Dkk2, Dkk3, Sfrp1, Frzb, Wif1, Grem1, Grem2, Chrd, Bmp2, Bmp4, Bmp5, Bmp7, Cd34, Pdgfra, Foxl1, Gli1, Des, Id1, Id2", ", "))
+#sel_markers=human2mouse(sel_genes, db=homologeneData2)$mouseGene
+DefaultAssay(scData.combined) <- "RNA"
+
+plot_genes(scData.combined, sel_markers)
+```
+
+```{r, fig.width=15, fig.height=3}
+
+DotPlot(scData.combined, features = sel_markers, scale =T, cols = "RdYlGn", assay = "RNA")
+
+```
+
+
+### Subpopulation markers from Kinchen et al. (Fig. 3)
+
+Str 1: Cxcl12, Adamdec1, Sfrp2, Hcar2, Nxf7, 
+Str 2: Wnt5a, Bmp2, Sox6, Fgf9
+Str 3: Maff, Cd55, Pcolce12, Ackr4
+
+```{r, fig.width=14, fig.height=6}
+sel_markers = c("Cxcl12", "Adamdec1","Pcolce2","Ackr4", "Wnt5a","Bmp2","Sox6", "Fgf9", "Maff","Cd55", "Hcar2", "Nxf7", "Sfrp2")
+#sel_markers=human2mouse(sel_genes, db=homologeneData2)$mouseGene
+DefaultAssay(scData.combined) <- "RNA"
+
+plot_genes(scData.combined, sel_markers)
+```
+
+```{r, fig.width=12, fig.height=3}
+
+DotPlot(scData.combined, features = sel_markers, scale =T, cols = "RdYlGn", assay = "RNA")
+
+```
+
+### Subpopulation markers from Jasso et al. 
+
+Str 1: 
+Str 2: Procr, Sox6
+Str 3: 
+
+```{r, fig.width=14, fig.height=6}
+sel_markers = c("Procr","Sox6")
+#sel_markers=human2mouse(sel_genes, db=homologeneData2)$mouseGene
+DefaultAssay(scData.combined) <- "RNA"
+
+plot_genes(scData.combined, sel_markers)
+```
+
+```{r, fig.width=12, fig.height=3}
+
+DotPlot(scData.combined, features = sel_markers, scale =T, cols = "RdYlGn", assay = "RNA")
+
+```
+
+
+## MF markers
+
+```{r, fig.width=14, fig.height=6}
+sel_markers=human2mouse(c("ACTA2","TAGLN","ACTG2","MYH11"), db=homologeneData2)$mouseGene
+DefaultAssay(scData.combined) <- "RNA"
+
+plot_genes(scData.combined, sel_markers)
+```
+
+```{r, fig.width=12, fig.height=3}
+
+DotPlot(scData.combined, features = sel_markers, scale =T, cols = "RdYlGn", assay = "RNA")
+
+```
+
+## Proliferation
+
+```{r, fig.width=14, fig.height=6}
+sel_markers=(c("Top2a","Mki67","Pcna"))
+DefaultAssay(scData.combined) <- "RNA"
+
+plot_genes(scData.combined, sel_markers)
+```
+
+```{r, fig.width=12, fig.height=3}
+
+DotPlot(scData.combined, features = sel_markers, scale =T, cols = "RdYlGn", assay = "RNA")
+
+```
+
+
+# Export
+
+Cluster assignations have been exported to file *Metadata_Assembloids_SCT_CCadj_simple_clusters.txt*.
+
+```{r}
+tmp = scData.combined@meta.data
+tmp$cell_id = rownames(tmp)
+write.table( tmp , file=file.path(data_storage_folder, "Metadata_Assembloids_SCT_CCadj_simple_clusters.txt"), sep="\t", row.names = F, quote = F)
+```
+
+
+# Jasso et al signatures
+
+# Simplified original Jasso et al. stroma clusters
+
+```{r}
+tmp_env = new.env()
+load("../../Data/external/GSE172261_Mouse_Colon_Stroma/All_markers_Celltype_Stroma_Atlas_simple.Rdata", envir = tmp_env)
+tmp_markers = get("cluster_markers", tmp_env)
+tmp_markers = subset(tmp_markers, p_val_adj < 0.05 & avg_log2FC > 0.5)
+tmp_gs = split(tmp_markers$gene, tmp_markers$cluster)
+names(tmp_gs) = paste0("Jasso_", names(tmp_gs))
+```
+
+
+```{r}
+library(GSVA)
+rerun=rerun_gsva
+gsva_score_file = file.path(data_storage_folder, file="Assembloids_SCT_CCadj_Jasso_Stroma_Orig_Simple_signatures_GSVA.rds")
+if(rerun) {
+  scores = gsva(scData.combined@assays$SCT@data, gset.idx.list = tmp_gs, parallel.sz = 12)
+  saveRDS(scores, file=gsva_score_file)
+} else {
+  scores = readRDS(gsva_score_file)
+}
+
+for(ss in rownames(scores)) {
+  scData.combined@meta.data[[ss]] = scores[ss, Cells(scData.combined)]
+}
+
+```
+
+```{r}
+for(ss in rownames(scores)) print(FeaturePlot(scData.combined, features = ss, order=T, label=T))
+```
+
+```{r}
+for(ss in sort(rownames(scores))) print(VlnPlot(scData.combined, features = ss, pt.size = 0) + geom_hline(yintercept = 0))
+```
+
+
+
+```{r, fig.height=4, fig.width=8}
+DotPlot(scData.combined, features = sort(rownames(scores)), cols = "RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
+DotPlot(scData.combined, features = sort(rownames(scores))) + theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+# Full original Jasso stroma clusters
+
+```{r}
+tmp_env = new.env()
+load("../../Data/external/GSE172261_Mouse_Colon_Stroma/All_markers_Celltype_Stroma_Atlas.Rdata", envir = tmp_env)
+tmp_markers = get("cluster_markers", tmp_env)
+tmp_markers = subset(tmp_markers, p_val_adj < 0.05 & avg_log2FC > 0.5)
+tmp_gs = split(tmp_markers$gene, tmp_markers$cluster)
+names(tmp_gs) = paste0("Jasso_", names(tmp_gs))
+```
+
+```{r}
+library(GSVA)
+
+rerun=rerun_gsva
+gsva_score_file = file.path(data_storage_folder, file="Assembloids_SCT_CCadj_Jasso_Stroma_Orig_Full_signatures_GSVA.rds")
+if(rerun) {
+  scores = gsva(scData.combined@assays$SCT@data, gset.idx.list = tmp_gs, parallel.sz = 12)
+  saveRDS(scores, file=gsva_score_file)
+} else {
+  scores = readRDS(gsva_score_file)
+}
+
+for(ss in rownames(scores)) {
+  scData.combined@meta.data[[ss]] = scores[ss, Cells(scData.combined)]
+}
+
+```
+
+```{r}
+for(ss in sort(rownames(scores))) print(FeaturePlot(scData.combined, features = ss, order=T, label=T))
+```
+
+```{r}
+for(ss in sort(rownames(scores))) print(VlnPlot(scData.combined, features = ss, pt.size = 0) + geom_hline(yintercept = 0))
+```
+
+
+
+```{r, fig.height=4, fig.width=8}
+DotPlot(scData.combined, features = sort(rownames(scores)), cols = "RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
+DotPlot(scData.combined, features = sort(rownames(scores))) + theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+# Elmentaite et al Gut Cell Atlas adult stroma clusters
+
+
+```{r}
+tmp_env = new.env()
+load("../../Data/external/Elmentaite_GutCellAtlas/Cluster_markers_gut_cell_atlas_healthy_adult.Rdata", envir = tmp_env)
+tmp_markers = get("cm", tmp_env)
+tmp_markers = subset(tmp_markers, p_val_adj < 0.05 & avg_log2FC > 0.5)
+tmp_gs = split(tmp_markers$gene, tmp_markers$cluster)
+tmp_gs = lapply(tmp_gs, function(x) {xt = human2mouse(x, db=homologeneData2)$mouseGene; return(unique(xt[!is.na(xt)]))})
+names(tmp_gs) = paste0("GCA_adult_", names(tmp_gs))
+tmp_gs <- tmp_gs[unlist(lapply(tmp_gs, length))>0]
+```
+
+
+
+```{r}
+library(GSVA)
+
+rerun=rerun_gsva
+gsva_score_file = file.path(data_storage_folder, file="Assembloids_SCT_CCadj_GCA_adult_mesenchyme_signatures_GSVA.rds")
+if(rerun) {
+  scores = gsva(scData.combined@assays$SCT@data, gset.idx.list = tmp_gs, parallel.sz = 12)
+  saveRDS(scores, file=gsva_score_file)
+} else {
+  scores = readRDS(gsva_score_file)
+}
+
+for(ss in rownames(scores)) {
+  scData.combined@meta.data[[make.names(ss)]] = scores[ss, Cells(scData.combined)]
+}
+
+```
+
+```{r}
+for(ss in sort(rownames(scores))) print(FeaturePlot(scData.combined, features = make.names(ss), order=T, label=T))
+```
+
+```{r}
+for(ss in sort(rownames(scores))) print(VlnPlot(scData.combined, features = make.names(ss), pt.size = 0) + geom_hline(yintercept = 0))
+```
+
+
+
+```{r, fig.height=6, fig.width=8}
+DotPlot(scData.combined, features = sort(make.names(rownames(scores))), cols = "RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
+DotPlot(scData.combined, features = sort(make.names(rownames(scores)))) + theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+<!-- # Elmentaite et al Gut Cell Atlas fetal stroma clusters -->
+
+
+<!-- ```{r} -->
+<!-- tmp_env = new.env() -->
+<!-- load("../../Data/external/Elmentaite_GutCellAtlas/Cluster_markers_gut_cell_atlas_fetal.Rdata", envir = tmp_env) -->
+<!-- tmp_markers = get("cm", tmp_env) -->
+<!-- tmp_markers = subset(tmp_markers, p_val_adj < 0.05 & avg_log2FC > 0.5) -->
+<!-- tmp_gs = split(tmp_markers$gene, tmp_markers$cluster) -->
+<!-- tmp_gs = lapply(tmp_gs, function(x) {xt = human2mouse(x, db=homologeneData2)$mouseGene; return(unique(xt[!is.na(xt)]))}) -->
+<!-- names(tmp_gs) = make.names(paste0("GCA_fetal_", names(tmp_gs))) -->
+<!-- tmp_gs <- tmp_gs[unlist(lapply(tmp_gs, length))>0] -->
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+<!-- library(GSVA) -->
+
+<!-- rerun=rerun_gsva -->
+<!-- gsva_score_file = file.path(data_storage_folder, file="Assembloids_SCT_CCadj_GCA_fetal_mesenchyme_signatures_GSVA.rds") -->
+<!-- if(rerun) { -->
+<!--   scores = gsva(scData.combined@assays$SCT@data, gset.idx.list = tmp_gs, parallel.sz = 12) -->
+<!--   saveRDS(scores, file=gsva_score_file) -->
+<!-- } else { -->
+<!--   scores = readRDS(gsva_score_file) -->
+<!-- } -->
+
+<!-- for(ss in rownames(scores)) { -->
+<!--   scData.combined@meta.data[[ss]] = scores[ss, Cells(scData.combined)] -->
+<!-- } -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- for(ss in sort(rownames(scores))) print(FeaturePlot(scData.combined, features = ss, order=T, label=T)) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- for(ss in sort(rownames(scores))) print(VlnPlot(scData.combined, features = ss, pt.size = 0) + geom_hline(yintercept = 0)) -->
+<!-- ``` -->
+
+
+
+<!-- ```{r, fig.height=4, fig.width=8} -->
+<!-- DotPlot(scData.combined, features = sort(rownames(scores)), cols = "RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1)) -->
+<!-- DotPlot(scData.combined, features = sort(rownames(scores))) + theme(axis.text.x = element_text(angle=45, hjust=1)) -->
+<!-- ``` -->
+
+# Software versions
+
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

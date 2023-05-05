@@ -1,0 +1,15 @@
+ClusterID	Type	Label	Comments
+0	Fibroblast	Fibroblast A	Vim;Rspo3,Cd34
+1	Fibroblast	Fibroblast B1	Vim;Bmp4,Sfrp1
+2	Fibroblast	Fibroblast A	Vim;Rspo3,Cd34
+3	Fibroblast	Fibroblast A	Vim;Rspo3,Cd34
+4	Fibroblast 	Fibroblast A/MF	Vim;Acta2,Tagln
+5	Fibroblast	Fibroblast A	Vim;Rspo3,Cd34
+6	Fibroblast	Fibroblast A	Vim;Rspo3,Cd34
+7	Fibroblast	Fibroblast B2	Vim;Wnt4,Bmp2
+8	Fibroblast	Fibroblast A	Vim;Rspo3,Cd34
+9	Stroma	Neuron	MSigDB
+10	Glial	Glia	S100b
+11	Fibroblast	Fibroblast A	Vim;Rspo3,Cd34
+12	Endothelia	Endothelial	Pecam1
+
