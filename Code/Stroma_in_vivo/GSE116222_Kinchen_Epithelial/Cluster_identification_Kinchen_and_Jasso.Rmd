@@ -1,0 +1,225 @@
+---
+title: "Cluster identification - GSE114374 + GSE172261 Colon mesenchyme, mouse"
+author: "Hilmar Berger"
+output: 
+ html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: false
+    number_sections: true
+    code_folding: hide
+    
+pdf_document:
+    fig_caption: true
+date: "`r format(Sys.time(), '%d %B, %Y %H:%M:%S')`"
+---
+
+
+```{r, message=FALSE}
+rm(list=ls())
+library(Seurat)
+library(ggplot2)
+
+library(readxl)
+library(writexl)
+library(knitr)
+library(data.table)
+library(cowplot)
+library(magrittr)
+library(dplyr)
+
+library(homologene)
+
+library(pheatmap)
+
+library(grid)
+library(png)
+
+data_storage_folder = "../../../Results/Jasso_Kinchen_combined"
+result_folder = data_storage_folder
+
+library(future)
+options("future.globals.maxSize"=2**33)
+plan("multisession", workers = 8)
+
+options("save.defaults" = list(compress=TRUE))
+
+rerun_analyses = T
+```
+
+We only keep clusters annotated as MoMF, DC, and KC in the global analysis and reprocess the remaining cells using the same integrated analysis. 
+
+```{r}
+load(file.path(data_storage_folder, "GSE114374_and_GSE172261_mouse_healthy_SCT.RData"))
+
+set.seed(1234)
+
+```
+
+
+# Cluster overview
+
+```{r, fig.width=8, fig.height=5}
+DimPlot(scData.combined, reduction = "umap", label = TRUE)
+```
+
+
+```{r, fig.width=8, fig.height=5}
+DimPlot(scData.combined, reduction = "umap", label = TRUE, split.by = "condition", ncol = 4)
+```
+
+```{r, fig.width=8, fig.height=5}
+DimPlot(scData.combined, reduction = "umap", label = TRUE, group.by = "Celltype_Stroma_Atlas")
+```
+
+```{r}
+table(scData.combined$Celltype_Stroma_Atlas, scData.combined$seurat_clusters)
+```
+
+
+# Final cluster assigment
+
+```{r}
+cluster_assignment = read.table("../../../Data/cluster_assignments/stroma_in_vivo/Clusters_Kinchen_Jasso_2023-02-28.txt", sep="\t",header=T, stringsAsFactors = F)
+options(width = 180)
+print(cluster_assignment)
+rownames(cluster_assignment) = as.character(cluster_assignment$ClusterID)
+scData.combined = AddMetaData(scData.combined, cluster_assignment[as.character(scData.combined$seurat_clusters),"Label"], col.name = "cluster_label")
+scData.combined = AddMetaData(scData.combined, cluster_assignment[as.character(scData.combined$seurat_clusters),"Type"], col.name = "cluster_type")
+```
+
+```{r, fig.width=7, fig.height=5}
+scData.combined = SetIdent(scData.combined, value="cluster_label" )
+p = DimPlot(scData.combined, reduction = "umap", label = TRUE, group.by = "cluster_label")
+print(p)
+```
+
+## Distribution of clusters within samples
+
+```{r}
+m = table(scData.combined$cluster_label, scData.combined$sample_label)
+m
+```
+
+```{r, fig.width=10,fig.height=7}
+mm  = as.matrix.data.frame(m)
+colnames(mm) = colnames(m)
+rownames(mm) = rownames(m)
+
+mm_r = sweep(mm, 2, apply(mm,2,sum), "/")
+
+pheatmap(mm_r, cluster_cols = F, cluster_rows=F, main="Proportion of each cluster per sample")
+```
+
+
+## Distribution of clusters within conditions
+
+```{r}
+m = table(scData.combined$cluster_label, scData.combined$condition)
+m
+```
+
+```{r}
+mm  = as.matrix.data.frame(m)
+colnames(mm) = colnames(m)
+rownames(mm) = rownames(m)
+
+mm_r = sweep(mm, 2, apply(mm,2,sum), "/")
+options(width=200)
+kable(round(mm_r,3))
+```
+
+
+```{r, fig.width=10,fig.height=7}
+pheatmap(mm_r, cluster_cols = F, cluster_rows=F)
+```
+
+```{r, fig.width=14, fig.height=8}
+mm_rel_ts = reshape2::melt(t(mm_r))
+colnames(mm_rel_ts) = c("Group","Cluster","Proportion_cells")
+mm_rel_ts$Cluster = factor(paste0("",mm_rel_ts$Cluster))
+
+ggplot(mm_rel_ts, aes(x=Group, y = Proportion_cells, group=Cluster)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(angle=60, hjust=1)) + facet_wrap(~ Cluster )
+
+```
+
+
+# Marker genes for clusters
+
+```{r}
+if(rerun_analyses) {
+  cluster_markers <- FindAllMarkers(object = scData.combined, only.pos = TRUE, assay = "RNA")
+  save(cluster_markers, file=file.path(data_storage_folder, "All_markers_Kinchen_Jasso.Rdata"))
+  write_xlsx(cluster_markers,file.path(result_folder, "All_markers_Kinchen_Jasso.xlsx"))
+} else {
+  load(file.path(data_storage_folder, "All_markers_Kinchen_Jasso.Rdata"))
+}
+```
+
+
+```{r}
+plot_top_genes <- function(data, dge_results_all, title) {
+  for (n in sort(unique(dge_results_all$cluster))) {
+    tmp = subset(dge_results_all, cluster==n)
+    if(nrow(tmp)<1) next
+    tmp_up = subset(tmp, avg_log2FC > 0)
+    if(nrow(tmp_up)<1) next
+    tmp_up$direction = "up"
+    final_top_genes = head(tmp_up, 10)
+    final_top_genes = final_top_genes[order(final_top_genes$avg_log2FC),]
+    final_top_genes$gene = factor(final_top_genes$gene, levels = final_top_genes$gene)
+    p = ggplot(final_top_genes, aes(y=avg_log2FC, x=gene, fill=direction)) + geom_bar(stat="identity") + ggtitle(paste0(n, ", ", title)) + coord_flip() + theme(axis.text.y =  element_text(size=12) )
+    print(p)
+    
+  }
+}
+```
+
+
+```{r}
+cluster_markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+```
+
+
+## overview (10 top genes for each cluster)
+
+```{r, fig.width=14, fig.height=12}
+DoHeatmap(scData.combined, features = top10$gene) + NoLegend()
+```
+
+
+## Percent expression of top markers across clusters
+
+```{r, fig.width=16, fig.height=14}
+top_5_markers = unique(unlist(tapply(cluster_markers$gene, cluster_markers$cluster, head, 5)))
+DotPlot(scData.combined, features = top_5_markers , dot.scale = 4, cols = c("red", "blue"), assay = "RNA") +    RotatedAxis()
+```
+
+## Log2 Fold Changes of top 10 DE genes from each cluster
+
+```{r, fig.width=12, fig.height=6}
+plot_top_genes(scData.combined, cluster_markers, "Cluster markers")
+```
+
+
+# Software versions
+
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

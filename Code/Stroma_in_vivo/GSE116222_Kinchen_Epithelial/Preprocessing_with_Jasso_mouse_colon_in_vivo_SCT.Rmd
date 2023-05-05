@@ -1,0 +1,192 @@
+---
+title: "GSE114374 and GSE172261 mouse colon stroma - Integration"
+author: "Hilmar Berger"
+output: 
+ html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: false
+    number_sections: true
+    code_folding: hide
+    
+pdf_document:
+    fig_caption: true
+date: "`r format(Sys.time(), '%d %B, %Y %H:%M:%S')`"
+---
+
+```{r, message=FALSE}
+library(Seurat)
+#library(SeuratDisk)
+library(ggplot2)
+
+library(readxl)
+library(knitr)
+library(data.table)
+library(cowplot)
+library(magrittr)
+
+library(pheatmap)
+
+library(future)
+plan("multicore", workers = 10)
+options(future.globals.maxSize = 10*2**32)
+
+data_storage_folder = "../../../Results/Jasso_Kinchen_combined"
+if (!file.exists(data_storage_folder)) dir.create(data_storage_folder, recursive=T)
+
+```
+
+```{r}
+reload_data = T
+if(reload_data) {
+  mc_env = new.env()
+  load("../../../Results/Kinchen_Stroma/Colon_mesenchyme_mouse.combined_cluster_annotated.RData", envir = mc_env)
+  sc_colon_2 = subset(get("scData.combined", mc_env), condition=="HC")
+  DefaultAssay(sc_colon_2) <- "RNA"
+  sc_colon_2 = DietSeurat(sc_colon_2, counts = T, scale.data = F, assays = "RNA", dimreducs = NULL, graphs = NULL)
+  rm(mc_env)
+  gc()
+}
+```
+
+```{r}
+if(reload_data) {
+  mc_env = new.env()
+  load("../../../Results/Jasso_Stroma/Colon_mesenchyme_mouse.combined_cluster_annotated.RData", envir = mc_env)
+  sc_colon = subset(get("scData.combined", mc_env), Treatment == "H2O")
+  DefaultAssay(sc_colon) <- "RNA"
+  sc_colon = DietSeurat(sc_colon, counts = T, scale.data = F, assays = "RNA", dimreducs = NULL, graphs = NULL)
+  rm(mc_env)
+  gc()
+}
+```
+
+```{r}
+if(reload_data) {
+  all_ge_data_filtered = sc_colon_2
+  genes_organoid = rownames(all_ge_data_filtered@assays$RNA@counts)
+  genes_colon = rownames(sc_colon@assays$RNA@counts)
+
+  genes_shared = intersect(genes_organoid, genes_colon)
+
+  meta_cols_organoid = colnames(all_ge_data_filtered@meta.data)
+  meta_cols_colon = colnames(sc_colon@meta.data)
+
+  shared_cols = intersect(meta_cols_organoid, meta_cols_colon)
+
+  sc_colon@meta.data$DS = "GSE172261_mouse_healthy"
+  all_ge_data_filtered@meta.data$DS = "GSE114374_mouse_healthy"
+
+  for (cc in meta_cols_organoid[!meta_cols_organoid %in% shared_cols]) {
+      sc_colon = AddMetaData(sc_colon, NA, col.name=cc)
+  }
+
+  for (cc in meta_cols_colon[!meta_cols_colon %in% shared_cols]) {
+      all_ge_data_filtered = AddMetaData(all_ge_data_filtered, NA, col.name=cc)
+  }
+
+  combined_sc_data = merge(subset(all_ge_data_filtered, features = genes_shared), subset(sc_colon, features = genes_shared))
+}
+
+```
+
+
+# Final preprocessing
+
+Since there are several independent batches of samples with partially very different outcomes in terms of processing quality and cell viability we will use data set integration (Stuart and Butler et al., Cell 2019, doi: 10.1016/j.cell.2019.05.031) as implemented in Seurat v3.
+
+
+```{r}
+if(reload_data) {
+  sc.list <- SplitObject(combined_sc_data, split.by = "orig.ident")
+
+  sc.list <- lapply(X = sc.list, FUN = function(x) {
+      x <- SCTransform(x, vst.flavor = "v2", verbose = FALSE) %>%
+    RunPCA(npcs = 30, verbose = FALSE)
+  })     
+}
+```
+
+
+```{r}
+if(reload_data) {
+  features <- SelectIntegrationFeatures(object.list = sc.list, nfeatures = 3000)
+  sc.list <- PrepSCTIntegration(object.list = sc.list, anchor.features = features)
+  
+  reference_dataset <- which(names(sc.list) %in% c("1_2","2_2","3_2"))
+  
+  anchors <- FindIntegrationAnchors(object.list = sc.list, normalization.method = "SCT",
+      anchor.features = features, reference = reference_dataset)
+  combined.sct <- IntegrateData(anchorset = anchors, normalization.method = "SCT")
+}  
+```
+
+```{r}
+if(reload_data) {
+  combined.sct <- RunPCA(combined.sct, verbose = FALSE)
+  combined.sct <- RunUMAP(combined.sct, reduction = "pca", dims = 1:30, verbose = FALSE)
+  combined.sct <- FindNeighbors(combined.sct, reduction = "pca", dims = 1:30)
+  combined.sct <- FindClusters(combined.sct, resolution = 0.3)
+  scData.combined = combined.sct
+}
+```
+
+```{r}
+processed_data_file = file.path(data_storage_folder, "GSE114374_and_GSE172261_mouse_healthy_SCT.RData")
+if(reload_data) {
+  save(scData.combined, file=processed_data_file, compress = T)
+} else {
+  load(processed_data_file)
+}
+```
+
+# Global clusters
+
+```{r, fig.width=14, fig.height=6}
+scData.combined <- SetIdent(scData.combined, value="seurat_clusters")
+DimPlot(scData.combined, reduction = "umap", group.by = "orig.ident")
+
+p1 <- DimPlot(scData.combined, reduction = "umap", group.by = "DS")
+p2 <- DimPlot(scData.combined, reduction = "umap", label = TRUE)
+plot_grid(p1, p2)
+
+DimPlot(scData.combined, reduction = "umap", split.by = "orig.ident", label = T)
+```
+
+## Cluster assignments
+
+```{r}
+m = table(scData.combined@meta.data$seurat_clusters, scData.combined@meta.data$orig.ident)
+kable(m)
+```
+
+
+```{r, fig.height=4, fig.width=6}
+mm = as.matrix.data.frame(m)
+colnames(mm) = colnames(m)
+rownames(mm) = rownames(m)
+mm_rel = sweep(mm, 2, apply(mm, 2,sum), "/")
+pheatmap(mm_rel, main="Relative single cell contribution of each cluster to condition totals")
+```
+
+# GSE172261 cluster annotations
+
+```{r, fig.width=10, fig.height=6}
+scData.combined$cluster_label_ds = ifelse(scData.combined$DS=="GSE114374_mouse_healthy", paste0("
+Kinchen_", scData.combined$cluster_label), paste0("Jasso_", scData.combined$Celltype_Stroma_Atlas))
+scData.combined <- SetIdent(scData.combined, value="cluster_label_ds")
+DimPlot(scData.combined, reduction = "umap", label = TRUE) + NoLegend()
+DimPlot(scData.combined, reduction = "umap", label = TRUE, split.by = "DS") + NoLegend()
+```
+
+
+```{r}
+table(scData.combined$cluster_label_ds, scData.combined$seurat_clusters)
+```
+
+# Software versions
+
+```{r}
+sessionInfo()
+```
+
