@@ -36,6 +36,7 @@ library(grid)
 library(png)
 
 result_folder = "../../Results/stromal/"
+data_storage_folder = result_folder
 
 library(future)
 options("future.globals.maxSize"=2**33)
@@ -57,6 +58,12 @@ scData.combined = SetIdent(scData.combined, value="cluster_label" )
 p = DimPlot(scData.combined, reduction = "umap", label = TRUE)
 print(p)
 ```
+
+```{r}
+scData.combined$cluster_label = factor(scData.combined$cluster_label, levels=c("Fibroblast A","Fibroblast A/MF","Fibroblast B1","Fibroblast B2","Glia","Endothelial","Neuron"))
+scData.combined <- SetIdent(scData.combined, value = "cluster_label")
+```
+
 
 # Fig. 2
 
@@ -90,7 +97,7 @@ dev.off()
 sel_markers =  c("Foxl1","Wnt5a","Sox6","Cd34","Cd81","Rspo3")
 all_plots = list()
 for (mm in sel_markers) {
-  p = FeaturePlot(scData.combined, features =mm, ncol = 1, order=T)  + NoAxes() + theme(legend.key.size = grid::unit(10, "points"))
+  p = FeaturePlot(scData.combined, features =mm, ncol = 1, order=T, max.cutoff = "q90")  + NoAxes() + theme(legend.key.size = grid::unit(10, "points"))
   all_plots[[mm]] = p
 }
 
@@ -109,7 +116,7 @@ dev.off()
 
 ```{r, fig.width=10, fig.height=5}
 sel_markers = c("Grem1","Grem2","Mgp","Chrd","Fst","Nog",paste0("Bmp",1:7))
-p = DotPlot(scData.combined, features = sel_markers, assay = "RNA", cols="RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
+p = DotPlot(scData.combined, features = sel_markers, assay = "RNA", cols="RdYlBu", dot.scale = 10) + theme(axis.text.x = element_text(angle=45, hjust=1))
 print(p)
 
 pdf(file.path(result_folder, "Fig_3a.pdf"), width = 10, height = 5)
@@ -142,18 +149,18 @@ dev.off()
 ## Supp Fig 5b
 
 
-```{r, fig.width=14, fig.height=3}
+```{r, fig.width=7, fig.height=6}
 sel_markers =   c("Col1a2","Pdgfra","Acta2","Sox10","Pecam1","S100b")
 all_plots = list()
 for (mm in sel_markers) {
-  p = FeaturePlot(scData.combined, features =mm, ncol = 1, order=T)  + NoAxes() + theme(legend.key.size = grid::unit(10, "points"))
+  p = FeaturePlot(scData.combined, features =mm, ncol = 1, order=T, max.cutoff = "q99")  + NoAxes() + theme(legend.key.size = grid::unit(10, "points"))
   all_plots[[mm]] = p
 }
 
-cowplot::plot_grid(plotlist = all_plots, nrow=1, ncol=6, greedy = T)
+cowplot::plot_grid(plotlist = all_plots, nrow=2, ncol=3, greedy = T)
 
-pdf(file.path(result_folder, "Fig_S5b.pdf"), width = 14, height = 3)
-cowplot::plot_grid(plotlist = all_plots, nrow=1, ncol=6, greedy = T)
+pdf(file.path(result_folder, "Fig_S5b.pdf"), width = 7, height = 6)
+cowplot::plot_grid(plotlist = all_plots, nrow=2, ncol=3, greedy = T)
 dev.off()
 
 ```
@@ -162,7 +169,7 @@ dev.off()
 
 ```{r, fig.width=10, fig.height=5}
 sel_markers = c(paste0("Wnt",c("2","2b","4","5a","5b","6","9a","10a","11")), paste0("Rspo",1:3), "Dkk2","Dkk3","Sfrp1","Sfrp4","Wif1","Frzb")
-p = DotPlot(scData.combined, features = sel_markers, assay = "RNA", cols="RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
+p = DotPlot(scData.combined, features = sel_markers, assay = "RNA", cols="RdYlBu", dot.scale = 10) + theme(axis.text.x = element_text(angle=45, hjust=1))
 print(p)
 
 pdf(file.path(result_folder, "Fig_S5c.pdf"), width = 10, height = 5)
@@ -173,6 +180,32 @@ dev.off()
 
 
 
+# Supp Fig 6e
+
+
+```{r}
+library(GSVA)
+gsva_score_file = file.path(data_storage_folder, file="Assembloids_SCT_CCadj_Jasso_Stroma_Orig_Simple_signatures_GSVA.rds")
+scores = readRDS(gsva_score_file)
+
+rownames(scores) = gsub("Jasso", "InVivo", rownames(scores))
+
+for(ss in rownames(scores)) {
+  scData.combined@meta.data[[ss]] = scores[ss, Cells(scData.combined)]
+}
+
+```
+
+
+
+```{r, fig.height=4, fig.width=8}
+p = DotPlot(scData.combined, features = sort(rownames(scores)), cols = "RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
+print(p)
+
+pdf(file.path(result_folder, "Fig_S6e.pdf"), width = 8, height = 4)
+print(p)
+dev.off()
+```
 
 
 # Software versions

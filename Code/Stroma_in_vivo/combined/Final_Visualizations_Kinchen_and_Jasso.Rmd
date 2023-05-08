@@ -75,36 +75,36 @@ p = DimPlot(scData.combined, reduction = "umap", label = TRUE) + NoLegend() + gg
 print(p)
 ```
 
-# Fig. 2
+# Supp Fig. 6
 
-## 2a
+## S6a
 
 ```{r}
-p = DimPlot(scData.combined, label=T, repel=F) + NoLegend() + ggtitle("Kinchen et al. and Jasso et al. stroma integration")
+p = DimPlot(scData.combined, label=T, repel=F) + ggtitle("Kinchen et al. and Jasso et al. stroma integration") + scale_color_brewer(type = "div")
 print(p)
 
-pdf(file.path(result_folder, "Fig_2a.pdf"), width = 6, height = 6)
+pdf(file.path(result_folder, "Fig_S6a.pdf"), width = 6, height = 6)
 print(p)
 dev.off()
 
 ```
 
-## Fig 2b
+## Fig S6b
 
 ```{r, fig.width=7, fig.height=5}
-p = DotPlot(scData.combined, features = c("Pecam1","Col1a2","Pdgfra","Acta2","S100b","Elavl4","Gli1"), assay = "RNA", cols="RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
+p = DotPlot(scData.combined, features = c("Col1a2","Pdgfra","Acta2","Tagln","Sox10","S100b","Pecam1","Lyve1","Elavl4","Ano1"), assay = "RNA", cols="RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
 print(p)
 
-pdf(file.path(result_folder, "Fig_2b.pdf"), width = 7, height = 5)
+pdf(file.path(result_folder, "Fig_6b.pdf"), width = 7, height = 5)
 print(p)
 dev.off()
 
 ```
 
-## Fig 2e
+## Fig S6c
 
 ```{r, fig.width=10, fig.height=7}
-sel_markers =  c("Foxl1","Postn","Wnt5a","Cd34","Cd81","Rspo3")
+sel_markers =  c("Foxl1","Wnt5a","Sox6","Cd34","Cd81","Rspo3")
 all_plots = list()
 for (mm in sel_markers) {
   p = FeaturePlot(scData.combined, features =mm, ncol = 1, order=T)  + NoAxes() + theme(legend.key.size = grid::unit(10, "points"))
@@ -113,7 +113,7 @@ for (mm in sel_markers) {
 
 cowplot::plot_grid(plotlist = all_plots, nrow=2, ncol=3, greedy = T)
 
-pdf(file.path(result_folder, "Fig_2e.pdf"), width = 10, height = 7)
+pdf(file.path(result_folder, "Fig_S6c.pdf"), width = 10, height = 7)
 cowplot::plot_grid(plotlist = all_plots, nrow=2, ncol=3, greedy = T)
 dev.off()
 
@@ -135,7 +135,7 @@ dev.off()
 
 ```
 
-## Fig 3b 
+## Fig S6f
 
 ```{r, fig.width=10, fig.height=7}
 sel_markers =  c("Bmp2","Bmp5","Bmp7","Grem1","Grem2","Mgp")
@@ -147,49 +147,31 @@ for (mm in sel_markers) {
 
 cowplot::plot_grid(plotlist = all_plots, nrow=2, ncol=3, greedy = T)
 
-pdf(file.path(result_folder, "Fig_3b.pdf"), width = 10, height = 7)
+pdf(file.path(result_folder, "Fig_S6f.pdf"), width = 10, height = 7)
 cowplot::plot_grid(plotlist = all_plots, nrow=2, ncol=3, greedy = T)
 dev.off()
 
 ```
 
 
-# Supp Fig. 3
-
-## Supp Fig 3a
+# Supp Fig. 6
 
 
-```{r, fig.width=14, fig.height=3}
-sel_markers =   c("Pecam1","Col1a2","Pdgfra","Acta2","S100b","Elavl4")
-all_plots = list()
-for (mm in sel_markers) {
-  p = FeaturePlot(scData.combined, features =mm, ncol = 1, order=T)  + NoAxes() + theme(legend.key.size = grid::unit(10, "points"))
-  all_plots[[mm]] = p
-}
-
-cowplot::plot_grid(plotlist = all_plots, nrow=1, ncol=6, greedy = T)
-
-pdf(file.path(result_folder, "Fig_S3a.pdf"), width = 14, height = 3)
-cowplot::plot_grid(plotlist = all_plots, nrow=1, ncol=6, greedy = T)
-dev.off()
-
-```
-
-## Supp Fig 3b
+## Supp Fig 6d
 
 ```{r, fig.width=10, fig.height=5}
 sel_markers = c(paste0("Wnt",c("2","2b","4","5a","5b","6","9a","10a","11")), paste0("Rspo",1:3), "Dkk2","Dkk3","Sfrp1","Sfrp4","Wif1","Frzb")
 p = DotPlot(scData.combined, features = sel_markers, assay = "RNA", cols="RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
 print(p)
 
-pdf(file.path(result_folder, "Fig_S3b.pdf"), width = 10, height = 5)
+pdf(file.path(result_folder, "Fig_S6d.pdf"), width = 10, height = 5)
 print(p)
 dev.off()
 
 ```
 
 
-## Heatmap Fig X
+## Heatmap Supp Fig 7h
 
 Heatmap of in vivo data showing the following gene expression in telocytes (fibroblast 2) and trophocytes (fibroblast 1 and 3):
 
@@ -198,18 +180,13 @@ Heatmap of in vivo data showing the following gene expression in telocytes (fibr
 
 
 ```{r}
-sel_genes = strsplit(c("Wnt4, Gata3, Smad6, Gpr20, Rab3b, Sox6, Bmp5, Bmp7, C3, Il33, Sfrp1, Angptl7, Cfb, C4b, Serpina3a, Il6"), ", ") |> unlist()
+sel_genes = strsplit(c("Foxl1, Bmp2, Wnt4, Gata3, Smad6, Gpr20, Rab3b, Sox6, Cd34, Rspo3, Grem1, Mgp, C3, Il33, Sfrp1, Angptl7, Cfb, Il6"), ", ") |> unlist()
 
 sel_mat = AverageExpression(scData.combined, assays = c("RNA"), features = sel_genes)
+mm = t(sel_mat[["RNA"]][, c("Fibroblast 1","Fibroblast 2", "Fibroblast 3")])
+pheatmap(mm[c("Fibroblast 2", "Fibroblast 1", "Fibroblast 3"),], scale="column", cluster_rows = F, cluster_cols = F, main="Average expression")
 
-#pheatmap(sel_mat[["SCT"]], scale="row", cluster_rows = F, main="SCT")
-pheatmap(sel_mat[["RNA"]], scale="row", cluster_rows = F, cluster_cols = F, main="Average expression (scaled)")
-
-pheatmap(sel_mat[["RNA"]][, c("Fibroblast 1","Fibroblast 2", "Fibroblast 3")], scale="row", cluster_rows = F, cluster_cols = F, main="Average expression")
-
-
-
-
+pheatmap(mm[c("Fibroblast 2", "Fibroblast 1", "Fibroblast 3"),], scale="column", cluster_rows = F, cluster_cols = F, main="Average expression", filename = file.path(result_folder, "Fig_S7h.pdf"), width = 7, height = 5)
 ```
 
 

@@ -47,8 +47,6 @@ options("save.defaults" = list(compress=TRUE))
 rerun_analyses = T
 ```
 
-We only keep clusters annotated as MoMF, DC, and KC in the global analysis and reprocess the remaining cells using the same integrated analysis. 
-
 ```{r}
 load(file.path(data_storage_folder, "GSE114374_and_GSE172261_mouse_healthy_SCT.RData"))
 

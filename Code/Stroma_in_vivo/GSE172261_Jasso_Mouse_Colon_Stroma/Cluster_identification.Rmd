@@ -35,13 +35,6 @@ library(pheatmap)
 library(grid)
 library(png)
 
-# library(clusterProfiler)
-# 
-# options(connectionObserver = NULL)
-# library(org.Hs.eg.db)
-# library(ReactomePA)
-# library(msigdbr)
-
 data_storage_folder = "../../../Results/Jasso_Stroma"
 result_folder = data_storage_folder
 
@@ -51,15 +44,11 @@ plan("multisession", workers = 8)
 
 options("save.defaults" = list(compress=TRUE))
 
-#source("DotPlot_fixed.R")
-
-
-#ref_folder = "../../References/"
 
 rerun_analyses = T
 ```
 
-We only keep clusters annotated as MoMF, DC, and KC in the global analysis and reprocess the remaining cells using the same integrated analysis. 
+
 
 ```{r}
 load(file.path(data_storage_folder, "GSE172261_ColonMesenchyme_mouse.combined.RData"))

@@ -45,7 +45,7 @@ options("future.globals.maxSize"=2**33)
 plan("multisession", workers = 8)
 
 rerun_dge_analyses = F
-rerun_gsva = T
+rerun_gsva = F
 ```
 
 # Overview
@@ -337,11 +337,12 @@ for (m in names(sc_list)) {
 
 ```{r, fig.width = 8, fig.height = 6}
 for (m in names(sc_list)) {
-  p = FeaturePlot(tmp, features = c("Lgr5","Mki67","Krt20","Muc2","Chga","Dclk1"), ncol = 3, order=T, combine=F)# + labs(subtitle = m)
-  print(plot_grid(plotlist = p, labels=m, label_y = 1,label_size = 10))
+  p = FeaturePlot(sc_list[[m]], features = c("Lgr5","Mki67","Krt20","Muc2","Chga","Dclk1"), ncol = 3, order=T, combine=F)# + labs(subtitle = m)
+  print(plot_grid(plotlist = p, labels=m, label_y = 1, label_size = 10))
+  
   m1 = c("assembloids"="b", "organoids"="f", "tissue"="d")[m]
   pdf(file.path(result_folder, paste0("Supp Fig_3_",m1,".pdf")), width = 8, height = 6)
-  print(plot_grid(plotlist = p, labels=m, label_y = 1,label_size = 10))
+  print(plot_grid(plotlist = p, labels=m, label_y = 1, label_size = 10))
   dev.off()
 }
 ```

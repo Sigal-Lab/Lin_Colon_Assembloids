@@ -152,7 +152,7 @@ ggplot(meta, aes(x=percent_mito))  + geom_density() + facet_wrap(~orig.ident) + 
 
 # Filtering 
 
-We exclude cells with less than 500 detected genes, those with > 2500 detected genes (possible doublets) in CD_I/II and > 3500 detected genes in BM_I (accounting for possible higher expressed gene counts in progenitors) and those with clear signs of cellular stress (percentage of mitochondrial RNA > 15%). 
+We exclude cells with less than 500 detected genes, those with > 5000 detected genes (possible doublets) and those with clear signs of cellular stress (percentage of mitochondrial RNA > 15%). 
 
 ```{r}
 feature_low = 500

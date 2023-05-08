@@ -458,6 +458,51 @@ DotPlot(scData.combined, features = sort(rownames(scores)), cols = "RdYlBu") + t
 DotPlot(scData.combined, features = sort(rownames(scores))) + theme(axis.text.x = element_text(angle=45, hjust=1))
 ```
 
+# Kinchen + Jasso combined clusters
+
+```{r}
+tmp_env = new.env()
+load("../../Results/Jasso_Kinchen_combined/All_markers_Kinchen_Jasso.Rdata", envir = tmp_env)
+tmp_markers = get("cluster_markers", tmp_env)
+tmp_markers = subset(tmp_markers, p_val_adj < 0.05 & avg_log2FC > 0.5)
+tmp_gs = split(tmp_markers$gene, tmp_markers$cluster)
+names(tmp_gs) = paste0("KinchenJasso_", names(tmp_gs))
+```
+
+```{r}
+library(GSVA)
+
+rerun=rerun_gsva
+gsva_score_file = file.path(data_storage_folder, file="Assembloids_SCT_CCadj_KinchenJasso_Stroma_signatures_GSVA.rds")
+if(rerun) {
+  scores = gsva(scData.combined@assays$SCT@data, gset.idx.list = tmp_gs, parallel.sz = 12)
+  saveRDS(scores, file=gsva_score_file)
+} else {
+  scores = readRDS(gsva_score_file)
+}
+
+for(ss in rownames(scores)) {
+  scData.combined@meta.data[[ss]] = scores[ss, Cells(scData.combined)]
+}
+
+```
+
+```{r}
+for(ss in sort(rownames(scores))) print(FeaturePlot(scData.combined, features = ss, order=T, label=T))
+```
+
+```{r}
+for(ss in sort(rownames(scores))) print(VlnPlot(scData.combined, features = ss, pt.size = 0) + geom_hline(yintercept = 0))
+```
+
+
+
+```{r, fig.height=5, fig.width=8}
+DotPlot(scData.combined, features = sort(rownames(scores)), cols = "RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
+DotPlot(scData.combined, features = sort(rownames(scores))) + theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+
 # Elmentaite et al Gut Cell Atlas adult stroma clusters
 
 
@@ -506,55 +551,6 @@ for(ss in sort(rownames(scores))) print(VlnPlot(scData.combined, features = make
 DotPlot(scData.combined, features = sort(make.names(rownames(scores))), cols = "RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
 DotPlot(scData.combined, features = sort(make.names(rownames(scores)))) + theme(axis.text.x = element_text(angle=45, hjust=1))
 ```
-
-<!-- # Elmentaite et al Gut Cell Atlas fetal stroma clusters -->
-
-
-<!-- ```{r} -->
-<!-- tmp_env = new.env() -->
-<!-- load("../../Data/external/Elmentaite_GutCellAtlas/Cluster_markers_gut_cell_atlas_fetal.Rdata", envir = tmp_env) -->
-<!-- tmp_markers = get("cm", tmp_env) -->
-<!-- tmp_markers = subset(tmp_markers, p_val_adj < 0.05 & avg_log2FC > 0.5) -->
-<!-- tmp_gs = split(tmp_markers$gene, tmp_markers$cluster) -->
-<!-- tmp_gs = lapply(tmp_gs, function(x) {xt = human2mouse(x, db=homologeneData2)$mouseGene; return(unique(xt[!is.na(xt)]))}) -->
-<!-- names(tmp_gs) = make.names(paste0("GCA_fetal_", names(tmp_gs))) -->
-<!-- tmp_gs <- tmp_gs[unlist(lapply(tmp_gs, length))>0] -->
-<!-- ``` -->
-
-
-
-<!-- ```{r} -->
-<!-- library(GSVA) -->
-
-<!-- rerun=rerun_gsva -->
-<!-- gsva_score_file = file.path(data_storage_folder, file="Assembloids_SCT_CCadj_GCA_fetal_mesenchyme_signatures_GSVA.rds") -->
-<!-- if(rerun) { -->
-<!--   scores = gsva(scData.combined@assays$SCT@data, gset.idx.list = tmp_gs, parallel.sz = 12) -->
-<!--   saveRDS(scores, file=gsva_score_file) -->
-<!-- } else { -->
-<!--   scores = readRDS(gsva_score_file) -->
-<!-- } -->
-
-<!-- for(ss in rownames(scores)) { -->
-<!--   scData.combined@meta.data[[ss]] = scores[ss, Cells(scData.combined)] -->
-<!-- } -->
-
-<!-- ``` -->
-
-<!-- ```{r} -->
-<!-- for(ss in sort(rownames(scores))) print(FeaturePlot(scData.combined, features = ss, order=T, label=T)) -->
-<!-- ``` -->
-
-<!-- ```{r} -->
-<!-- for(ss in sort(rownames(scores))) print(VlnPlot(scData.combined, features = ss, pt.size = 0) + geom_hline(yintercept = 0)) -->
-<!-- ``` -->
-
-
-
-<!-- ```{r, fig.height=4, fig.width=8} -->
-<!-- DotPlot(scData.combined, features = sort(rownames(scores)), cols = "RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1)) -->
-<!-- DotPlot(scData.combined, features = sort(rownames(scores))) + theme(axis.text.x = element_text(angle=45, hjust=1)) -->
-<!-- ``` -->
 
 # Software versions
 

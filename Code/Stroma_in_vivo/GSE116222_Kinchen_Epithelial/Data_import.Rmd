@@ -131,15 +131,6 @@ cowplot::plot_grid(ncol = 2, nrow = 2,
 
 ```
 
-<!-- ### Pairwise feature distribution densities -->
-
-<!-- ```{r, fig.width=14, fig.height=10} -->
-<!-- meta = as.data.table(all_ge_data_raw@meta.data) -->
-
-<!-- ggplot(meta) + geom_density2d_filled(aes(x=nCount_RNA, y=nFeature_RNA), contour_var = "ndensity" ) + facet_wrap(~Condition) + ggtitle("nCount_RNA") -->
-<!-- ggplot(meta) + geom_density2d_filled(aes(x=percent_ribo, y=nFeature_RNA), contour_var = "ndensity" ) + facet_wrap(~Condition) + ggtitle("percent ribo") -->
-<!-- #ggplot(meta) + geom_density2d_filled(aes(x=percent_mito, y=nFeature_RNA), contour_var = "ndensity" ) + facet_wrap(~group) + ggtitle("percent mitochondrial") -->
-<!-- ``` -->
 
 ### Thresholds for numbers of detected genes and percentage of mitochondrial genes
 
@@ -155,7 +146,7 @@ ggplot(meta, aes(x=percent_mito))  + geom_density() + facet_wrap(~sample_label) 
 
 # Filtering 
 
-We exclude cells with less than 500 detected genes, those with > 2500 detected genes (possible doublets) in CD_I/II and > 3500 detected genes in BM_I (accounting for possible higher expressed gene counts in progenitors) and those with clear signs of cellular stress (percentage of mitochondrial RNA > 15%). 
+We exclude cells with less than 500 detected genes, those with >5000 detected genes (possible doublets) and those with clear signs of cellular stress (percentage of mitochondrial RNA > 5%). 
 
 ```{r}
 feature_low = 500

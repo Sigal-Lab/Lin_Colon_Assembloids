@@ -48,7 +48,6 @@ rerun_analyses = T
 
 ```
 
-We only keep clusters annotated as MoMF, DC, and KC in the global analysis and reprocess the remaining cells using the same integrated analysis. 
 
 ```{r}
 load(file.path(data_storage_folder, "GSE114347_ColonMesenchyme_mouse.combined.RData"))
@@ -271,11 +270,6 @@ p = DimPlot(scData.combined, reduction = "umap", label = TRUE)
 print(p)
 ```
 
-<!-- ```{r} -->
-<!-- pdf(file.path(result_folder, "UMAP_annotated.pdf"), width=14, height=8) -->
-<!-- print(p) -->
-<!-- dev.off() -->
-<!-- ``` -->
 
 ## Distribution of clusters within samples
 

@@ -45,14 +45,6 @@ table(all_ge_data_filtered$orig.ident)
 
 We use a list of known cell cycle genes (provided by the Seurat package and translated to Mus musculus gene symbols) to estimate the contribution of cell cycle phase on the global gene expression.
 
-<!-- ```{r} -->
-<!-- # those are the mouse homologues of human cell cycle genes that come with Seurat  -->
-<!-- cell_cycle_genes = read.table("../regev_lab_cell_cycle_genes_OK_working_with_phase.txt", sep="\t", header=F, stringsAsFactors = F) -->
-<!-- colnames(cell_cycle_genes) = c("Symbol","Phase") -->
-<!-- s.genes = subset(cell_cycle_genes, Phase=="S")$Symbol -->
-<!-- g2m.genes = subset(cell_cycle_genes, Phase=="G2M")$Symbol -->
-<!-- ``` -->
-
 ```{r}
 scData = all_ge_data_filtered
 scData <- NormalizeData(object = scData, normalization.method = "LogNormalize", scale.factor = 1e4)
@@ -63,22 +55,11 @@ scData <- ScaleData(object = scData, features = rownames(scData))
 gc()
 ```
 
-## Association of major variance components with cell cycle
 
 ```{r}
 scData <- RunPCA(scData, features = VariableFeatures(scData), ndims.print = c(1:20), nfeatures.print = 20)
-#scData <- RunPCA(scData, features = VariableFeatures(scData), ndims.print = c(1:100), nfeatures.print = 20)
-
-# check top 100 positively loaded genes for PC_3 for cell cycle association in MSigDB
-#xx = scData@reductions$pca@feature.loadings
-#cat(paste(names(tail(sort(xx[, "PC_3"]), 100)), collapse="\n"))
 gc()
 ```
-
-
-<!-- ```{r, fig.width=12} -->
-<!-- DimHeatmap(scData, dims = c(1, 7, 13)) -->
-<!-- ``` -->
 
 ## Cell cycle scoring
 
@@ -86,11 +67,11 @@ We use the Seura cell cycle scoring method to score association with S and G2/M 
 
 ```{r}
 mouse.cc.genes = lapply(cc.genes.updated.2019, function(x) unique(human2mouse(x, db = homologeneData2)$mouseGene))
-#scData <- CellCycleScoring(scData, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+
 scData <- CellCycleScoring(scData, s.features = mouse.cc.genes$s.genes, g2m.features = mouse.cc.genes$g2m.genes, set.ident = TRUE)
 
 # view cell cycle scores and phase assignments
-#head(scData[[]])
+
 boxplot(scData$S.Score ~ scData$Phase)
 boxplot(scData$G2M.Score ~ scData$Phase)
 ```
