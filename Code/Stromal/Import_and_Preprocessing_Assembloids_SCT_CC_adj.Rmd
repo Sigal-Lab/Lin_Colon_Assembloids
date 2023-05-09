@@ -38,12 +38,6 @@ preexcluded_cells = read.table("../../Data/cell_annotations/Pre-excluded_cells_a
 
 
 ```{r, fig.height=6, fig.width=8}
-
-#scData.combined = readRDS("../Preprocessed/As ready for figure_scRNAseq_data.rds")
-#scData.combined$cluster_label = Idents(scData.combined)
-#saveRDS(scData.combined@meta.data, file="Hao_Metadata.rds")
-#rm(scData.combined)
-
 sp5.data <- Read10X(data.dir = "../../Data/filtered_matrices/stromal/SP087_005/")
 sp5 <- CreateSeuratObject(counts = sp5.data, project = "sp5", min.cells = 3, min.features = 200)
 
@@ -135,7 +129,7 @@ pheatmap(mr, scale="none", main="Relative contributions of cell cycle phases per
 ```{r}
 sc.list <- SplitObject(scData, split.by = "orig.ident")
 # normalize the datasets using SCTransform
-#sc.list <- lapply(X = sc.list, FUN = SCTransform)
+
 sc.list <- lapply(X = sc.list, FUN = function(x) {
       x <- SCTransform(x, vst.flavor = "v2", verbose = FALSE, vars.to.regress = c("S.Score", "G2M.Score" )) %>%
     RunPCA(npcs = 30, verbose = FALSE)
@@ -159,9 +153,6 @@ combined.sct <- RunTSNE(combined.sct, reduction = "pca", dims = 1:30)
 
 combined.sct <- FindNeighbors(combined.sct, reduction = "pca", dims = 1:30)
 combined.sct <- FindClusters(combined.sct, resolution = 0.2)  # modify resolution to change the number of clusters
-
-# combined.sct@meta.data$cluster_label = meta_Hao[Cells(combined.sct), "cluster_label"]
-# combined.sct <- SetIdent(combined.sct, value="cluster_label" )
 
 combined.sct <- NormalizeData(object = combined.sct, normalization.method = "LogNormalize", assay = "RNA")
 combined.sct <- ScaleData(object = combined.sct, features = rownames(combined.sct), assay = "RNA")

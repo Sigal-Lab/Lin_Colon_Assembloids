@@ -326,18 +326,6 @@ save(scData.combined,file=file.path(data_storage_folder, "Colon_mesenchyme_mouse
 ```
 
 
-# Export
-
-Cluster assignations have been exported to file *Metadata_human.txt*.
-
-```{r}
-tmp = scData.combined@meta.data
-tmp$cell_id = rownames(tmp)
-write.table( tmp , file="Metadata_mouse.txt", sep="\t", row.names = F, quote = F)
-```
-
-
-
 # Software versions
 
 ```{r}

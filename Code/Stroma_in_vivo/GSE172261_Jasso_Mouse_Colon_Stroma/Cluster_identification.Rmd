@@ -315,7 +315,8 @@ save(scData.combined,file=file.path(data_storage_folder, "Colon_mesenchyme_mouse
 ```
 
 
-# Export
+# Population markers using the predefined Stroma Atlas cell types
+
 
 ```{r, eval=FALSE}
 scData.combined <- SetIdent(scData.combined, value = "Celltype_Stroma_Atlas")
@@ -328,7 +329,7 @@ scData.combined <- SetIdent(scData.combined, value = "Celltype_Stroma_Atlas")
 # }
 ```
 
-```{r, eval=FALSE}
+```{r}
 Stroma_simple = c("BEC 1"="BEC","BEC 2"="BEC","Fibroblast 1a"="Fib 1","Fibroblast 1b"="Fib 1","Fibroblast 1c"="Fib 1","Fibroblast 2a"="Fib 2","Fibroblast 2b"="Fib 2","Fibroblast 2c"="Fib 2","Fibroblast 3a"="Fib 3","Fibroblast 3b"="Fib 3","Glial"="Glial","ICC 1"="ICC","ICC 2"="ICC","LEC"="LEC","MSC"="MSC","Pericytes"="Pericytes","SMC 1"="SMC","SMC 2"="SMC")
 scData.combined$celltype_stroma_simple <- Stroma_simple[as.character(scData.combined$Celltype_Stroma_Atlas)]
 

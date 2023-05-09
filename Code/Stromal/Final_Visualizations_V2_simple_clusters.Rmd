@@ -185,10 +185,10 @@ dev.off()
 
 ```{r}
 library(GSVA)
-gsva_score_file = file.path(data_storage_folder, file="Assembloids_SCT_CCadj_Jasso_Stroma_Orig_Simple_signatures_GSVA.rds")
+gsva_score_file = file.path(data_storage_folder, file="Assembloids_SCT_CCadj_KinchenJasso_Stroma_signatures_GSVA.rds")
 scores = readRDS(gsva_score_file)
 
-rownames(scores) = gsub("Jasso", "InVivo", rownames(scores))
+rownames(scores) = gsub("KinchenJasso", "InVivo", rownames(scores))
 
 for(ss in rownames(scores)) {
   scData.combined@meta.data[[ss]] = scores[ss, Cells(scData.combined)]

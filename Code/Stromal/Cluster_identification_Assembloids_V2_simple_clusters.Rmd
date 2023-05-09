@@ -61,7 +61,6 @@ rerun_analyses = F
 rerun_gsva = F
 ```
 
-We only keep clusters annotated as MoMF, DC, and KC in the global analysis and reprocess the remaining cells using the same integrated analysis. 
 
 ```{r}
 scData.combined <- readRDS(file.path(data_storage_folder, "Assembloids_combined_SCT_CC_adj.Rdata"))
@@ -374,7 +373,7 @@ write.table( tmp , file=file.path(data_storage_folder, "Metadata_Assembloids_SCT
 
 ```{r}
 tmp_env = new.env()
-load("../../Data/external/GSE172261_Mouse_Colon_Stroma/All_markers_Celltype_Stroma_Atlas_simple.Rdata", envir = tmp_env)
+load("../../Results/Jasso_Stroma/All_markers_Celltype_Stroma_Atlas_simple.Rdata", envir = tmp_env)
 tmp_markers = get("cluster_markers", tmp_env)
 tmp_markers = subset(tmp_markers, p_val_adj < 0.05 & avg_log2FC > 0.5)
 tmp_gs = split(tmp_markers$gene, tmp_markers$cluster)
@@ -401,50 +400,6 @@ for(ss in rownames(scores)) {
 
 ```{r}
 for(ss in rownames(scores)) print(FeaturePlot(scData.combined, features = ss, order=T, label=T))
-```
-
-```{r}
-for(ss in sort(rownames(scores))) print(VlnPlot(scData.combined, features = ss, pt.size = 0) + geom_hline(yintercept = 0))
-```
-
-
-
-```{r, fig.height=4, fig.width=8}
-DotPlot(scData.combined, features = sort(rownames(scores)), cols = "RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
-DotPlot(scData.combined, features = sort(rownames(scores))) + theme(axis.text.x = element_text(angle=45, hjust=1))
-```
-
-# Full original Jasso stroma clusters
-
-```{r}
-tmp_env = new.env()
-load("../../Data/external/GSE172261_Mouse_Colon_Stroma/All_markers_Celltype_Stroma_Atlas.Rdata", envir = tmp_env)
-tmp_markers = get("cluster_markers", tmp_env)
-tmp_markers = subset(tmp_markers, p_val_adj < 0.05 & avg_log2FC > 0.5)
-tmp_gs = split(tmp_markers$gene, tmp_markers$cluster)
-names(tmp_gs) = paste0("Jasso_", names(tmp_gs))
-```
-
-```{r}
-library(GSVA)
-
-rerun=rerun_gsva
-gsva_score_file = file.path(data_storage_folder, file="Assembloids_SCT_CCadj_Jasso_Stroma_Orig_Full_signatures_GSVA.rds")
-if(rerun) {
-  scores = gsva(scData.combined@assays$SCT@data, gset.idx.list = tmp_gs, parallel.sz = 12)
-  saveRDS(scores, file=gsva_score_file)
-} else {
-  scores = readRDS(gsva_score_file)
-}
-
-for(ss in rownames(scores)) {
-  scData.combined@meta.data[[ss]] = scores[ss, Cells(scData.combined)]
-}
-
-```
-
-```{r}
-for(ss in sort(rownames(scores))) print(FeaturePlot(scData.combined, features = ss, order=T, label=T))
 ```
 
 ```{r}
@@ -502,55 +457,6 @@ DotPlot(scData.combined, features = sort(rownames(scores)), cols = "RdYlBu") + t
 DotPlot(scData.combined, features = sort(rownames(scores))) + theme(axis.text.x = element_text(angle=45, hjust=1))
 ```
 
-
-# Elmentaite et al Gut Cell Atlas adult stroma clusters
-
-
-```{r}
-tmp_env = new.env()
-load("../../Data/external/Elmentaite_GutCellAtlas/Cluster_markers_gut_cell_atlas_healthy_adult.Rdata", envir = tmp_env)
-tmp_markers = get("cm", tmp_env)
-tmp_markers = subset(tmp_markers, p_val_adj < 0.05 & avg_log2FC > 0.5)
-tmp_gs = split(tmp_markers$gene, tmp_markers$cluster)
-tmp_gs = lapply(tmp_gs, function(x) {xt = human2mouse(x, db=homologeneData2)$mouseGene; return(unique(xt[!is.na(xt)]))})
-names(tmp_gs) = paste0("GCA_adult_", names(tmp_gs))
-tmp_gs <- tmp_gs[unlist(lapply(tmp_gs, length))>0]
-```
-
-
-
-```{r}
-library(GSVA)
-
-rerun=rerun_gsva
-gsva_score_file = file.path(data_storage_folder, file="Assembloids_SCT_CCadj_GCA_adult_mesenchyme_signatures_GSVA.rds")
-if(rerun) {
-  scores = gsva(scData.combined@assays$SCT@data, gset.idx.list = tmp_gs, parallel.sz = 12)
-  saveRDS(scores, file=gsva_score_file)
-} else {
-  scores = readRDS(gsva_score_file)
-}
-
-for(ss in rownames(scores)) {
-  scData.combined@meta.data[[make.names(ss)]] = scores[ss, Cells(scData.combined)]
-}
-
-```
-
-```{r}
-for(ss in sort(rownames(scores))) print(FeaturePlot(scData.combined, features = make.names(ss), order=T, label=T))
-```
-
-```{r}
-for(ss in sort(rownames(scores))) print(VlnPlot(scData.combined, features = make.names(ss), pt.size = 0) + geom_hline(yintercept = 0))
-```
-
-
-
-```{r, fig.height=6, fig.width=8}
-DotPlot(scData.combined, features = sort(make.names(rownames(scores))), cols = "RdYlBu") + theme(axis.text.x = element_text(angle=45, hjust=1))
-DotPlot(scData.combined, features = sort(make.names(rownames(scores)))) + theme(axis.text.x = element_text(angle=45, hjust=1))
-```
 
 # Software versions
 
