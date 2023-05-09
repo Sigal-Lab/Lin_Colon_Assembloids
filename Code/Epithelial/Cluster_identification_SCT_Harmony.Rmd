@@ -31,7 +31,6 @@ library(dplyr)
 library(pheatmap)
 
 library(grid)
-library(png)
 
 data_storage_folder = ("../../Results/epithelial/")
 result_folder = data_storage_folder

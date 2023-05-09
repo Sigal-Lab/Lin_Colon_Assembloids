@@ -24,10 +24,6 @@ library(knitr)
 library(data.table)
 library(cowplot)
 
-#options(connectionObserver = NULL) # temporary fix for RStudio issue with RSQLite
-#library(org.Hs.eg.db)
-library(rtracklayer)
-
 data_storage_folder = "../../../Results/Kinchen_Stroma"
 
 if (!file.exists(data_storage_folder)) dir.create(data_storage_folder, recursive=T)

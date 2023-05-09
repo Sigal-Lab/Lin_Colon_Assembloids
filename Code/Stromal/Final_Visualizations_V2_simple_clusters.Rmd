@@ -33,7 +33,6 @@ library(homologene)
 library(pheatmap)
 
 library(grid)
-library(png)
 
 result_folder = "../../Results/stromal/"
 data_storage_folder = result_folder

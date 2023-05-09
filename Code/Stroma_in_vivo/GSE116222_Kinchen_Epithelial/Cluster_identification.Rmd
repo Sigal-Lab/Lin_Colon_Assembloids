@@ -33,7 +33,6 @@ library(homologene)
 library(pheatmap)
 
 library(grid)
-library(png)
 
 data_storage_folder = "../../../Results/Kinchen_Stroma/"
 result_folder = data_storage_folder

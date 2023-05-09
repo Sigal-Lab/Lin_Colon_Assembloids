@@ -33,7 +33,6 @@ library(homologene)
 library(pheatmap)
 
 library(grid)
-library(png)
 
 library(GSVA)
 
