@@ -1,4 +1,6 @@
-# R code used for analysis of Lin et al., Assembloids reveal a crucial interplay between epithelium and stroma during gastrointestinal crypt maturation 
+### R code used for analysis of Lin et al., Establishment of gastrointestinal assembloids to study the interplay between epithelial crypts and their mesenchymal niche
+
+Published in Nature Communications 2023, https://doi.org/10.1038/s41467-023-38780-3
 
 To reproduce the manuscript figures: 
 
